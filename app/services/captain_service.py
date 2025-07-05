@@ -11,6 +11,7 @@ from app.services.prompt_service import PromptService
 from app.utils.message_utils import create_standard_message
 from app.utils.mq_utils import RabbitMQPublisher
 import yaml
+import pika
 
 import logging
 logger = logging.getLogger(__name__)
