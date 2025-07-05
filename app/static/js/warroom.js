@@ -372,8 +372,28 @@ function setupSocketEventListeners() {
     socket.on('new_message', (message) => {
         console.log('%c[WebSocket] 收到新消息:', 'background: #4CAF50; color: white; padding: 2px 5px; border-radius: 3px;', message);
         
+        // 工程师对话消息的特殊处理
+        if (message.message_category === 'engineer_chat') {
+            console.log('%c[工程师对话] 收到工程师对话消息', 'background: #FF9800; color: white; padding: 2px 5px; border-radius: 3px;', {
+                sender_type: message.sender_type,
+                message_id: message.message_id,
+                content_preview: typeof message.message_content === 'object' ? 
+                    message.message_content.content?.substring(0, 50) + '...' : 
+                    message.message_content?.substring(0, 50) + '...'
+            });
+            
+            // 如果是AI回复，隐藏思考指示器
+            if (message.sender_type === 'ai') {
+                hideAIThinkingIndicator();
+                console.log('%c[工程师对话] 收到AI回复，隐藏思考指示器', 'color: #4CAF50;');
+            }
+        }
+        
         // 直接调用新的 addMessage 函数，它会处理去重和状态更新
-        if (addMessage(message)) {
+        const added = addMessage(message);
+        console.log(`%c[WebSocket] 消息添加结果: ${added ? '成功' : '失败/重复'}`, added ? 'color: #4CAF50;' : 'color: #FFA500;');
+        
+        if (added) {
             scrollToBottom();
             
             // 如果有新任务或状态变化，刷新统计和事件详情 (此逻辑保留)
@@ -824,7 +844,7 @@ function addMessage(message) {
         return false;
     }
 
-    const uniqueKey = message.temp_id ? `tmp_${message.temp_id}` : `id_${message.id}`;
+    const uniqueKey = message.temp_id ? `tmp_${message.temp_id}` : `id_${message.message_id || message.id}`;
 
     // 如果存在同temp_id的待确认消息，先移除
     if (message.temp_id) {
@@ -842,7 +862,8 @@ function addMessage(message) {
         return false;
     }
 
-    console.log(`%c[addMessage] 添加新消息 ${uniqueKey}, 类型:${message.message_type}, 来源:${message.message_from}`, 'color: #4CAF50;');
+    console.log(`%c[addMessage] 添加新消息 ${uniqueKey}, 类型:${message.message_type || 'undefined'}, 来源:${message.message_from || 'undefined'}`, 'color: #4CAF50;');
+    console.log('[addMessage] 消息详情:', message);
 
     displayedMessages.add(uniqueKey);
     messagesData.push(message);
@@ -874,6 +895,13 @@ function addMessage(message) {
         if (message.message_type === 'llm_request') {
             messageClass += ' message-llm-request';
         }
+    } else if (message.message_category === 'engineer_chat') {
+        // 工程师对话消息
+        if (message.sender_type === 'user') {
+            messageClass += ' message-engineer-question';
+        } else if (message.sender_type === 'ai') {
+            messageClass += ' message-ai-assistant';
+        }
     } else {
         messageClass += ' message-user';
     }
@@ -881,6 +909,11 @@ function addMessage(message) {
         messageClass += ' message-pending';
     }
     messageElement.className = messageClass;
+    
+    // 为思考指示器设置特殊的data属性
+    if (message.message_type === 'thinking') {
+        messageElement.setAttribute('data-message-type', 'thinking');
+    }
     
     let messageContent = '';
     messageContent += `
@@ -896,11 +929,14 @@ function addMessage(message) {
     `;
     messageContent += '<div class="message-content">';
 
-    // (此处省略了原 addMessage 函数中根据 message.message_type 等处理不同消息展示的详细HTML构建逻辑)
-    // (您需要将原 addMessage 函数中从 "处理llm_request类型的消息" 开始到 "普通消息" 的那一大段 if/else if/else 逻辑粘贴到这里)
-    // 为了简洁，暂时用一个占位符表示，实际替换时请务必包含完整的消息内容构建逻辑
-    // Placeholder for detailed message content rendering logic from original addMessage:
-    if (message.message_type === 'llm_request' || message.message_type.includes('_llm_request')) {
+    // 防御性检查消息类型
+    if (!message.message_type) {
+        console.warn('[addMessage] 消息缺少message_type字段，设置默认值');
+        message.message_type = 'chat'; // 默认类型
+    }
+    
+    // 处理消息内容逻辑
+    if (message.message_type === 'llm_request' || (message.message_type && message.message_type.includes('_llm_request'))) {
         let requestContent = '';
         let data = extractMessageData(message.message_content);
         if (typeof data === 'object' && data !== null) {
@@ -913,7 +949,7 @@ function addMessage(message) {
             requestContent = data;
         }
         messageContent += `<div class="llm-request-notification"><p>${requestContent}</p></div>`;
-    } else if (message.message_type === 'llm_response' || message.message_type.includes('_llm_response')) {
+    } else if (message.message_type === 'llm_response' || (message.message_type && message.message_type.includes('_llm_response'))) {
         const content = message.message_content;
         let data = extractMessageData(content);
         if (message.message_from === '_captain') {
@@ -1045,6 +1081,24 @@ function addMessage(message) {
         const content = message.message_content;
         let data = extractMessageData(content);
         messageContent += `<div class="system-notification"><p>${data.response_text}</p></div>`;
+    } else if (message.message_category === 'engineer_chat') {
+        // 处理工程师对话消息
+        const content = message.message_content;
+        let data = extractMessageData(content);
+        let chatContent = '';
+        
+        if (typeof data === 'object' && data !== null) {
+            chatContent = data.content || data.text || JSON.stringify(data);
+        } else {
+            chatContent = data || '';
+        }
+        
+        if (message.sender_type === 'user') {
+            messageContent += `<div class="engineer-question"><p>${chatContent}</p></div>`;
+        } else if (message.sender_type === 'ai') {
+            // AI助手回复支持Markdown渲染
+            messageContent += `<div class="ai-response markdown-content">${marked.parse(chatContent)}</div>`;
+        }
     } else {
         // 普通消息，确保 message.message_content 不是对象。如果是对象，尝试提取 data.text 或 stringify
         let plainTextContent = message.message_content;
@@ -1092,6 +1146,18 @@ async function sendMessage() {
 
     if (!text) return;
 
+    // 检查是否是AI助手对话模式（以@AI开头的消息）
+    if (text.startsWith('@AI') || text.startsWith('@ai')) {
+        await sendEngineerChatMessage(text.replace(/^@AI\s*|^@ai\s*/i, '').trim());
+        return;
+    }
+    
+    // 检查是否是普通@消息（未来可扩展给其他用户或Agent）
+    if (text.startsWith('@') && !text.startsWith('@AI') && !text.startsWith('@ai')) {
+        showToast('请使用 @AI 来与AI助手对话，或输入普通消息', 'info');
+        return;
+    }
+
     if (!socket.connected) {
         showToast('WebSocket未连接，无法发送消息', 'error');
         return;
@@ -1135,6 +1201,159 @@ async function sendMessage() {
     // 清空输入框并重新聚焦
     messageInput.value = '';
     messageInput.focus();
+}
+
+// 工程师对话相关函数
+async function sendEngineerChatMessage(message) {
+    if (!message.trim()) return;
+
+    // 显示发送中状态
+    const sendButton = elements.sendButton;
+    const originalText = sendButton.querySelector('.cyber-btn-text').textContent;
+    
+    // 立即清空输入框和恢复按钮（优化用户体验）
+    elements.userInput.value = '';
+    
+    try {
+        sendButton.querySelector('.cyber-btn-text').textContent = '发送中...';
+        sendButton.disabled = true;
+
+        const response = await fetch('/api/engineer-chat/send', {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({
+                event_id: eventId,
+                message: message
+            })
+        });
+
+        const data = await response.json();
+
+        if (response.ok && data.status === 'success') {
+            // 立即显示用户消息（不等待WebSocket广播）
+            if (data.data && data.data.user_message) {
+                addMessage(data.data.user_message);
+                scrollToBottom();
+            }
+            
+            // 立即恢复按钮状态 - 异步模式下不等待AI回复
+            sendButton.querySelector('.cyber-btn-text').textContent = originalText;
+            sendButton.disabled = false;
+            elements.userInput.focus();
+            
+            // 显示AI正在思考的状态指示器
+            if (data.data && data.data.ai_processing) {
+                showAIThinkingIndicator();
+            }
+            
+            // 如果概要有更新，提示用户
+            if (data.data && data.data.summary_updated) {
+                showToast('事件概要已更新', 'info');
+            }
+            
+            console.log('%c[工程师对话] 用户消息已显示，AI正在后台处理', 'color: #4CAF50;');
+            return; // 立即返回，不在finally块中重复处理
+            
+        } else if (data.status === 'warning') {
+            // 达到轮次限制
+            showToast(data.message, 'warning');
+            
+            // 可以在这里添加创建新会话的逻辑
+            if (confirm('是否创建新的对话会话？')) {
+                await createNewChatSession();
+            }
+            
+        } else {
+            showToast(data.message || '发送失败', 'error');
+        }
+
+    } catch (error) {
+        console.error('发送工程师对话消息失败:', error);
+        showToast('发送失败: ' + error.message, 'error');
+    } finally {
+        // 恢复按钮状态（仅在出错时执行）
+        sendButton.querySelector('.cyber-btn-text').textContent = originalText;
+        sendButton.disabled = false;
+        elements.userInput.focus();
+    }
+}
+
+// 创建新的工程师对话会话
+async function createNewChatSession() {
+    try {
+        const response = await fetch('/api/engineer-chat/new-session', {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({
+                event_id: eventId
+            })
+        });
+
+        const data = await response.json();
+
+        if (response.ok && data.status === 'success') {
+            showToast('新对话会话已创建', 'success');
+            return data.data.new_session_id;
+        } else {
+            showToast(data.message || '创建新会话失败', 'error');
+            return null;
+        }
+
+    } catch (error) {
+        console.error('创建新会话失败:', error);
+        showToast('创建新会话失败: ' + error.message, 'error');
+        return null;
+    }
+}
+
+// AI思考状态指示器相关函数
+let aiThinkingIndicatorId = null;
+
+function showAIThinkingIndicator() {
+    // 如果已经有思考指示器，不重复添加
+    if (aiThinkingIndicatorId) return;
+    
+    // 创建思考指示器消息
+    const thinkingMessage = {
+        id: `ai_thinking_${Date.now()}`,
+        message_id: `ai_thinking_${Date.now()}`,
+        event_id: eventId,
+        message_from: 'ai_assistant',
+        message_content: 'AI助手正在思考中...',
+        message_type: 'thinking',
+        message_category: 'engineer_chat',
+        sender_type: 'ai',
+        created_at: new Date().toISOString(),
+        temp_indicator: true // 标记为临时指示器
+    };
+    
+    // 添加到界面
+    if (addMessage(thinkingMessage)) {
+        aiThinkingIndicatorId = thinkingMessage.id;
+        console.log('%c[AI思考指示器] 显示思考状态', 'color: #FF9800;');
+        
+        // 滚动到底部
+        scrollToBottom();
+    }
+}
+
+function hideAIThinkingIndicator() {
+    if (aiThinkingIndicatorId) {
+        // 移除思考指示器元素
+        const indicatorElement = document.getElementById(`msg-${aiThinkingIndicatorId}`);
+        if (indicatorElement) {
+            indicatorElement.remove();
+            console.log('%c[AI思考指示器] 隐藏思考状态', 'color: #FF9800;');
+        }
+        
+        // 从数据结构中移除
+        const uniqueKey = `id_${aiThinkingIndicatorId}`;
+        displayedMessages.delete(uniqueKey);
+        const idx = messagesData.findIndex(m => m.id === aiThinkingIndicatorId);
+        if (idx !== -1) messagesData.splice(idx, 1);
+        
+        aiThinkingIndicatorId = null;
+    }
 }
 
 // 获取当前驾驶模式
@@ -1670,6 +1889,23 @@ function getRoleName(role) {
 }
 
 function getSenderName(message) {
+    // 处理工程师对话消息
+    if (message.message_category === 'engineer_chat') {
+        if (message.sender_type === 'user') {
+            if (message.user_nickname) {
+                return message.user_nickname;
+            }
+            try {
+                const info = JSON.parse(localStorage.getItem('user_info') || '{}');
+                return info.nickname || info.username || '工程师';
+            } catch (e) {
+                return '工程师';
+            }
+        } else if (message.sender_type === 'ai') {
+            return 'AI助手';
+        }
+    }
+    
     if (message.message_from === 'user') {
         if (message.user_nickname) {
             return message.user_nickname;
@@ -1752,8 +1988,8 @@ function getMessageTypeText(type) {
         'system_notification': '系统通知'
     };
 
-    if (type.includes('_llm_request')) return 'AI请求';
-    if (type.includes('_llm_response')) return 'AI响应';
+    if (type && type.includes('_llm_request')) return 'AI请求';
+    if (type && type.includes('_llm_response')) return 'AI响应';
     return typeMap[type] || type;
 }
 

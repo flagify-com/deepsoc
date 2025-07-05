@@ -253,6 +253,112 @@ h1, h2, h3, h4, h5, h6, .cyber-btn, .section-title, .status-label {
     color: var(--info-color);
 }
 
+/* 工程师对话消息样式 */
+.message-engineer-question {
+    border-left: none;
+    border-right: 3px solid #4fc3f7;
+    background-color: rgba(79, 195, 247, 0.15);
+    align-self: flex-end;
+    margin-left: auto;
+    max-width: 80%;
+}
+
+.message-engineer-question .message-sender {
+    color: #4fc3f7;
+}
+
+.message-ai-assistant {
+    border-left: 3px solid #66bb6a;
+    background-color: rgba(102, 187, 106, 0.1);
+    max-width: 85%;
+}
+
+.message-ai-assistant .message-sender {
+    color: #66bb6a;
+}
+
+/* AI思考指示器样式 */
+.message[data-message-type="thinking"] {
+    border-left: 3px solid #ff9800;
+    background-color: rgba(255, 152, 0, 0.08);
+    max-width: 85%;
+    animation: thinking-pulse 1.5s ease-in-out infinite;
+}
+
+.message[data-message-type="thinking"] .message-sender {
+    color: #ff9800;
+}
+
+.message[data-message-type="thinking"] .message-content {
+    font-style: italic;
+    color: rgba(255, 152, 0, 0.8);
+}
+
+@keyframes thinking-pulse {
+    0%, 100% { opacity: 0.6; }
+    50% { opacity: 1; }
+}
+
+.engineer-question p {
+    margin: 0;
+    padding: 8px 12px;
+    border-radius: 12px;
+    background-color: rgba(79, 195, 247, 0.2);
+    border: 1px solid rgba(79, 195, 247, 0.3);
+}
+
+.ai-response {
+    margin: 0;
+}
+
+.ai-response.markdown-content {
+    background-color: rgba(102, 187, 106, 0.05);
+    border-radius: 8px;
+    padding: 12px;
+    border: 1px solid rgba(102, 187, 106, 0.2);
+}
+
+.ai-response.markdown-content h1,
+.ai-response.markdown-content h2,
+.ai-response.markdown-content h3 {
+    color: #66bb6a;
+    margin-top: 0;
+    margin-bottom: 8px;
+}
+
+.ai-response.markdown-content p {
+    margin-bottom: 8px;
+    line-height: 1.6;
+}
+
+.ai-response.markdown-content code {
+    background-color: rgba(0, 0, 0, 0.3);
+    padding: 2px 4px;
+    border-radius: 3px;
+    font-family: 'Consolas', 'Monaco', monospace;
+}
+
+.ai-response.markdown-content pre {
+    background-color: rgba(0, 0, 0, 0.4);
+    padding: 12px;
+    border-radius: 6px;
+    overflow-x: auto;
+    margin: 8px 0;
+}
+
+.ai-response.markdown-content ul,
+.ai-response.markdown-content ol {
+    margin-left: 20px;
+    margin-bottom: 8px;
+}
+
+.ai-response.markdown-content blockquote {
+    border-left: 3px solid #66bb6a;
+    margin-left: 0;
+    padding-left: 12px;
+    color: rgba(224, 224, 224, 0.8);
+}
+
 .message-header {
     display: flex;
     justify-content: space-between;
@@ -646,6 +752,21 @@ h1, h2, h3, h4, h5, h6, .cyber-btn, .section-title, .status-label {
 
 .chat-input::placeholder {
     color: rgba(224, 224, 224, 0.5);
+}
+
+.input-help-text {
+    margin-top: 8px;
+    font-size: 0.8rem;
+    color: rgba(224, 224, 224, 0.6);
+    text-align: center;
+    font-style: italic;
+}
+
+.input-help-text span {
+    background-color: rgba(0, 168, 255, 0.1);
+    padding: 4px 8px;
+    border-radius: 4px;
+    border: 1px solid rgba(0, 168, 255, 0.2);
 }
 
 /* 右侧面板 */

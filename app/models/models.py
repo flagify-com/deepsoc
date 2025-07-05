@@ -225,6 +225,11 @@ class Message(db.Model):
     round_id = db.Column(db.Integer)
     message_content = Column(JSON)
     message_type = Column(String(32))
+    # 工程师对话相关字段
+    message_category = Column(String(32), default='agent')  # 'agent' or 'engineer_chat'
+    chat_session_id = Column(String(64))  # 工程师对话会话ID
+    sender_type = Column(String(32))  # 'user', 'ai', 'agent'
+    event_summary_version = Column(String(64))  # 事件概要版本哈希
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
     
@@ -238,6 +243,10 @@ class Message(db.Model):
             'round_id': self.round_id,
             'message_content': self.message_content,
             'message_type': self.message_type,
+            'message_category': self.message_category,
+            'chat_session_id': self.chat_session_id,
+            'sender_type': self.sender_type,
+            'event_summary_version': self.event_summary_version,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }

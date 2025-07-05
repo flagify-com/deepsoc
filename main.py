@@ -76,6 +76,9 @@ app.register_blueprint(state_bp, url_prefix='/api/state')
 from app.controllers.user_controller import user_bp
 app.register_blueprint(user_bp, url_prefix='/api/user')
 
+from app.controllers.engineer_chat_api import engineer_chat_bp
+app.register_blueprint(engineer_chat_bp, url_prefix='/api/engineer-chat')
+
 from app.controllers.socket_controller import register_socket_events
 register_socket_events(socketio)
 
@@ -329,15 +332,37 @@ if __name__ == '__main__':
         # This is the main web server process
         logger.info("Starting DeepSOC Web Server and services...")
         
-        # Start RabbitMQ consumer only when running as the main web server
+        # 先检查端口可用性，避免启动后台线程后才发现端口冲突
+        host = os.getenv('LISTEN_HOST', '0.0.0.0')
+        port = int(os.getenv('LISTEN_PORT', 5007))
+        
+        try:
+            import socket
+            # 测试端口是否可用
+            test_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            test_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            test_socket.bind((host, port))
+            test_socket.close()
+            logger.info(f"Port {port} is available, starting services...")
+        except OSError as e:
+            logger.error(f"Port {port} is not available: {e}")
+            logger.error("Please stop the existing process or use a different port.")
+            sys.exit(1)
+        
+        # 端口可用后再启动RabbitMQ consumer
         start_rabbitmq_consumer()
         
         # 启动Web服务器
-        socketio.run(
-            app, 
-            host=os.getenv('LISTEN_HOST', '0.0.0.0'), 
-            port=int(os.getenv('LISTEN_PORT', 5007)), 
-            debug=(os.getenv('FLASK_DEBUG', 'False').lower() == 'true'), # Control via env var
-            use_reloader=False, # Important: reloader can cause issues with threads and SocketIO
-            allow_unsafe_werkzeug=(os.getenv('FLASK_DEBUG', 'False').lower() == 'true') # Werkzeug specific for debug
-        ) 
+        try:
+            socketio.run(
+                app, 
+                host=host, 
+                port=port, 
+                debug=(os.getenv('FLASK_DEBUG', 'False').lower() == 'true'), # Control via env var
+                use_reloader=False, # Important: reloader can cause issues with threads and SocketIO
+                allow_unsafe_werkzeug=True # Allow for development and testing
+            )
+        except Exception as e:
+            logger.error(f"Failed to start web server: {e}")
+            stop_rabbitmq_consumer()
+            sys.exit(1) 
