@@ -2,6 +2,29 @@
 
 ## [未发布]
 
+## [1.2.0] - 2025-07-06 - Version Management System
+
+### 新增功能
+- **完整版本管理系统**: 为DeepSOC添加了专业的版本管理能力
+  - 新增核心版本文件 `app/_version.py`，支持语义化版本控制
+  - 新增 `app/__init__.py` 统一暴露版本信息接口
+  - 启动时显示版本信息横幅，包含版本号、发布名称、构建日期等
+  - 新增 `/api/version` API端点，支持程序化获取版本信息
+  - Web界面集成版本显示：首页底部和作战室右下角实时显示当前版本
+  - 新增 `tools/version_manager.py` 专业版本管理工具
+    - 支持查看、升级（patch/minor/major）和设置版本号
+    - 自动更新changelog.md和创建Git标签
+    - 集成Git工作流，支持版本标签管理
+  - 新增 `tools/create_version_template.py` 版本管理模板生成器
+    - 为任何Python项目快速生成版本管理骨架
+    - 包含示例主程序、版本管理工具和使用文档
+  - 新增包管理配置 `setup.py` 和 `MANIFEST.in`
+  - 完善技术文档
+    - `docs/Version_Management.md` - 详细版本管理指南
+    - `docs/Simple_Version_Management_Template.md` - 简化版本管理模板说明
+    - 更新项目文档索引，改进文档导航结构
+
+
 ### 新增
 - **用户消息显示优化**: 修复多用户作战室中消息发送者显示不正确的问题
   - 后端API增强：在消息创建和广播时正确关联用户信息（user_id、user_nickname、user_username）
