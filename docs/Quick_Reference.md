@@ -2,6 +2,8 @@
 
 ## 🚀 版本管理快速命令
 
+> **⭐ 重要更新**：现在采用"预先编辑changelog"工作流，确保Git标签包含完整的版本更新内容！
+
 ### 常用命令
 ```bash
 # 查看版本
@@ -23,15 +25,17 @@ python tools/version_manager.py set 1.5.0
 git add .
 git commit -m "feat: 功能描述"
 
-# 2. 升级版本
+# 2. ⭐ 预先编辑changelog.md
+# 在 "## [未发布]" 下面添加新版本内容
+
+# 3. ⭐ 提交changelog预编辑
+git add changelog.md
+git commit -m "docs: 预先完善v1.X.0版本更新内容"
+
+# 4. 升级版本
 python tools/version_manager.py bump minor --release-name "功能名称"
 
-# 3. 完善文档
-# 编辑 changelog.md
-git add changelog.md
-git commit -m "docs: 完善版本文档"
-
-# 4. 推送标签（可选）
+# 5. 推送标签（可选）
 git push origin v1.x.x
 ```
 

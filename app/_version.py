@@ -2,12 +2,12 @@
 DeepSOC 版本信息
 """
 
-__version__ = "1.3.0"
-__version_info__ = (1, 3, 0)
+__version__ = "1.4.0"
+__version_info__ = (1, 4, 0)
 
 # 版本元数据
 VERSION_MAJOR = 1
-VERSION_MINOR = 3
+VERSION_MINOR = 4
 VERSION_PATCH = 0
 VERSION_BUILD = None
 

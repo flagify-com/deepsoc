@@ -60,6 +60,28 @@ git commit -m "feat: 完成XXX功能实现
 🤖 Generated with [Claude Code](https://claude.ai/code)
 
 Co-Authored-By: Claude <noreply@anthropic.com>"
+
+# 4. 预先编辑changelog.md ⭐ 重要步骤
+# 在 "## [未发布]" 下面添加新版本的详细内容：
+#
+# ## [1.3.0] - 2025-07-06 - 功能名称
+#
+# ### 新增功能
+# - **功能模块**: 详细的功能描述
+#   - 具体特性1，说明用户价值
+#   - 具体特性2，说明技术实现
+#   - 具体特性3，说明解决的问题
+
+# 5. 提交changelog预编辑
+git add changelog.md
+git commit -m "docs: 预先完善v1.X.0版本更新内容
+
+- 详细记录新增功能特性
+- 包含用户价值和技术要点
+
+🤖 Generated with [Claude Code](https://claude.ai/code)
+
+Co-Authored-By: Claude <noreply@anthropic.com>"
 ```
 
 #### 3. 版本发布
@@ -81,26 +103,10 @@ python tools/version_manager.py bump major --release-name "Major Update"
 - ✅ 版本号升级
 - ✅ 更新版本文件 (`app/_version.py`)
 - ✅ 更新发布名称和构建日期
-- ✅ 自动更新 `changelog.md`
-- ✅ 创建Git标签 (`v1.x.x`)
+- ✅ 自动更新 `changelog.md`（合并预编辑内容）
+- ✅ 创建Git标签 (`v1.x.x`) **包含完整changelog**
 
-#### 4. 完善发布文档
-
-```bash
-# 编辑 changelog.md，完善版本更新内容
-# 将 "TODO: 添加更新内容" 替换为具体的更新说明
-
-# 提交文档更新
-git add changelog.md
-git commit -m "docs: 完善vX.X.X版本更新日志
-
-- 详细记录新增功能
-- 更新技术文档说明
-
-🤖 Generated with [Claude Code](https://claude.ai/code)
-
-Co-Authored-By: Claude <noreply@anthropic.com>"
-```
+**🎯 关键优势：** Git标签现在包含完整的changelog内容，确保版本归属准确！
 
 #### 5. 验证发布结果
 
@@ -272,9 +278,9 @@ python tools/version_manager.py show
 ### 发布操作 ✓
 
 - [ ] 提交最终功能代码
+- [ ] **⭐ 预先编辑changelog.md更新内容**
+- [ ] **⭐ 提交changelog预编辑**
 - [ ] 使用版本管理工具升级版本
-- [ ] 完善changelog.md更新内容
-- [ ] 提交changelog更新
 - [ ] 验证版本信息正确性
 
 ### 发布后验证 ✓
@@ -388,15 +394,27 @@ git commit -m "fix: 修复用户登录问题
 🤖 Generated with [Claude Code](https://claude.ai/code)
 Co-Authored-By: Claude <noreply@anthropic.com>"
 
-# 2. 发布补丁版本
-python tools/version_manager.py bump patch --release-name "Bug Fixes"
+# 2. ⭐ 预先编辑changelog.md
+# 在 "## [未发布]" 下面添加：
+# ## [1.2.1] - 2025-07-06 - Bug Fixes
+# 
+# ### 修复
+# - **用户登录**: 修复用户登录问题
+#   - 解决session超时问题
+#   - 优化错误提示信息
 
-# 3. 完善changelog
-# 编辑changelog.md...
-
-# 4. 提交文档
+# 3. ⭐ 提交changelog预编辑
 git add changelog.md
-git commit -m "docs: 完善v1.2.1版本更新日志"
+git commit -m "docs: 预先完善v1.2.1版本更新内容
+
+- 详细记录bug修复内容
+- 包含具体解决的技术问题
+
+🤖 Generated with [Claude Code](https://claude.ai/code)
+Co-Authored-By: Claude <noreply@anthropic.com>"
+
+# 4. 发布补丁版本
+python tools/version_manager.py bump patch --release-name "Bug Fixes"
 ```
 
 ### 示例2: 新功能发布
@@ -413,12 +431,28 @@ git commit -m "feat: 添加数据导出功能
 🤖 Generated with [Claude Code](https://claude.ai/code)
 Co-Authored-By: Claude <noreply@anthropic.com>"
 
-# 2. 发布次版本
-python tools/version_manager.py bump minor --release-name "Data Export Feature"
+# 2. ⭐ 预先编辑changelog.md
+# 在 "## [未发布]" 下面添加：
+# ## [1.3.0] - 2025-07-06 - Data Export Feature
+# 
+# ### 新增功能
+# - **数据导出**: 新增数据导出功能
+#   - 支持CSV格式导出，方便数据分析
+#   - 支持自定义字段选择，灵活导出
+#   - 添加导出历史记录，便于追踪
 
-# 3. 完善changelog和提交
+# 3. ⭐ 提交changelog预编辑
 git add changelog.md
-git commit -m "docs: 完善v1.3.0版本更新日志"
+git commit -m "docs: 预先完善v1.3.0版本更新内容
+
+- 详细记录数据导出功能特性
+- 包含用户价值和技术实现点
+
+🤖 Generated with [Claude Code](https://claude.ai/code)
+Co-Authored-By: Claude <noreply@anthropic.com>"
+
+# 4. 发布次版本
+python tools/version_manager.py bump minor --release-name "Data Export Feature"
 ```
 
 ## 自动化和CI/CD集成
