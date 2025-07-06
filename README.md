@@ -107,7 +107,6 @@ GRANT ALL PRIVILEGES ON deepsoc.* TO 'deepsoc_user'@'localhost';
 FLUSH PRIVILEGES;
 -- DATABASE_URL="mysql+pymysql://deepsoc_user:deepsoc_password@localhost:3306/deepsoc"
 ```
-如遇 Alembic 迁移失败，可手动执行 `add_user_uuid.sql` 更新表结构。
 
 2.3 RabbitMQ 准备
 
