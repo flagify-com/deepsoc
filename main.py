@@ -4,6 +4,7 @@ import argparse
 import logging
 import threading  # Added for MQ Consumer
 import atexit  # Added for graceful shutdown
+import traceback  # Added for error logging
 from sqlalchemy import text
 from flask import Flask, jsonify, render_template, redirect, url_for, request, make_response
 from flask_socketio import SocketIO
@@ -123,7 +124,7 @@ def handle_mq_message_to_socketio(message_data):
     # This could be made more specific based on message_type if frontend handles different events.
     socketio_event_name = 'new_message' 
     
-    logger.info(f"MQ Consumer: Relaying message (ID: {message_id}, Type: {message_type}) to SocketIO room '{event_id}' for event '{socketio_event_name}'")
+    logger.debug(f"MQ Consumer: Relaying message (ID: {message_id}, Type: {message_type}) to SocketIO room '{event_id}' for event '{socketio_event_name}'")
     try:
         # Emit with app.app_context() to ensure context for operations like url_for if used by SocketIO internals
         # although socketio.emit itself is generally thread-safe and handles context for its own operations.
@@ -136,11 +137,20 @@ def handle_mq_message_to_socketio(message_data):
 
 def start_rabbitmq_consumer():
     global mq_consumer, mq_consumer_thread
-    logger.info("Initializing RabbitMQ consumer...")
+    logger.debug("Initializing RabbitMQ consumer...")
+    # 明确传递环境变量参数，确保使用正确的配置
+    rabbitmq_host = os.getenv('RABBITMQ_HOST', '127.0.0.1')
+    rabbitmq_port = int(os.getenv('RABBITMQ_PORT', 5672))
+    rabbitmq_user = os.getenv('RABBITMQ_USER', 'guest')
+    rabbitmq_password = os.getenv('RABBITMQ_PASSWORD', 'guest')
+    rabbitmq_vhost = os.getenv('RABBITMQ_VHOST', '/')
+    
     mq_consumer = RabbitMQConsumer(
-        # Uses default connection params from mq_consumer.py which read from .env
-        # queue_name can be specific if needed, default is fine
-        # routing_key default 'notifications.frontend.#' is also fine
+        host=rabbitmq_host,
+        port=rabbitmq_port,
+        username=rabbitmq_user,
+        password=rabbitmq_password,
+        virtual_host=rabbitmq_vhost
     )
     
     # Start consuming in a separate thread
@@ -152,21 +162,21 @@ def start_rabbitmq_consumer():
         daemon=True # Daemon thread will exit when the main program exits
     )
     mq_consumer_thread.start()
-    logger.info("RabbitMQ consumer thread started.")
+    logger.debug("RabbitMQ consumer thread started.")
 
 def stop_rabbitmq_consumer():
     global mq_consumer, mq_consumer_thread
     if mq_consumer:
-        logger.info("Stopping RabbitMQ consumer...")
+        logger.debug("Stopping RabbitMQ consumer...")
         mq_consumer.stop_consuming()
         if mq_consumer_thread and mq_consumer_thread.is_alive():
-            logger.info("Waiting for RabbitMQ consumer thread to join...")
+            logger.debug("Waiting for RabbitMQ consumer thread to join...")
             mq_consumer_thread.join(timeout=10) # Wait for up to 10 seconds
             if mq_consumer_thread.is_alive():
                 logger.warning("RabbitMQ consumer thread did not join in time.")
             else:
-                logger.info("RabbitMQ consumer thread joined successfully.")
-    logger.info("RabbitMQ consumer stopped.")
+                logger.debug("RabbitMQ consumer thread joined successfully.")
+    logger.debug("RabbitMQ consumer stopped.")
 
 # Register the cleanup function to be called on exit
 atexit.register(stop_rabbitmq_consumer)

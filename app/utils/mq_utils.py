@@ -12,7 +12,8 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 # Default RabbitMQ connection parameters (can be overridden by environment variables)
-RABBITMQ_HOST = os.getenv('RABBITMQ_HOST', 'localhost')
+# 强制使用IPv4地址，避免IPv6连接尝试
+RABBITMQ_HOST = os.getenv('RABBITMQ_HOST', '127.0.0.1')
 RABBITMQ_PORT = int(os.getenv('RABBITMQ_PORT', 5672)) # pika expects port as int
 RABBITMQ_USER = os.getenv('RABBITMQ_USER', 'guest')
 RABBITMQ_PASSWORD = os.getenv('RABBITMQ_PASSWORD', 'guest')
@@ -33,7 +34,8 @@ class RabbitMQPublisher:
             virtual_host=virtual_host,
             credentials=self.credentials,
             heartbeat=600,  # Keep connection alive, helps with some firewalls
-            blocked_connection_timeout=300 # How long to wait before failing a connection
+            blocked_connection_timeout=300, # How long to wait before failing a connection
+            socket_timeout=10  # 设置socket超时，加快失败检测
         )
         self.connection = None
         self.channel = None

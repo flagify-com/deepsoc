@@ -13,7 +13,8 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 # RabbitMQ connection parameters from environment variables
-RABBITMQ_HOST = os.getenv('RABBITMQ_HOST', 'localhost')
+# 强制使用IPv4地址，避免IPv6连接尝试
+RABBITMQ_HOST = os.getenv('RABBITMQ_HOST', '127.0.0.1')
 RABBITMQ_PORT = int(os.getenv('RABBITMQ_PORT', 5672))
 RABBITMQ_USER = os.getenv('RABBITMQ_USER', 'guest')
 RABBITMQ_PASSWORD = os.getenv('RABBITMQ_PASSWORD', 'guest')
@@ -38,7 +39,8 @@ class RabbitMQConsumer:
             host=host, port=port,
             virtual_host=virtual_host, credentials=self.credentials,
             heartbeat=600, # Keep connection alive
-            blocked_connection_timeout=300
+            blocked_connection_timeout=300,
+            socket_timeout=10  # 设置socket超时，加快失败检测
         )
         self.exchange_name = exchange_name
         self.exchange_type = exchange_type
@@ -86,16 +88,10 @@ class RabbitMQConsumer:
             logger.error("Consumer: Channel is not open. Cannot setup exchange/queue.")
             return
         try:
-            logger.info(f"Consumer: Declaring exchange '{self.exchange_name}' (type: {self.exchange_type})")
             self._channel.exchange_declare(exchange=self.exchange_name, exchange_type=self.exchange_type, durable=True)
-            
-            logger.info(f"Consumer: Declaring queue '{self.queue_name}'")
-            # Exclusive=False, auto_delete=False to make it survive consumer restarts if needed (though typically main app and consumer live together)
             self._channel.queue_declare(queue=self.queue_name, durable=True, exclusive=False, auto_delete=False)
-            
-            logger.info(f"Consumer: Binding queue '{self.queue_name}' to exchange '{self.exchange_name}' with routing key '{self.routing_key}'")
             self._channel.queue_bind(queue=self.queue_name, exchange=self.exchange_name, routing_key=self.routing_key)
-            logger.info("Consumer: Exchange, queue, and binding setup complete.")
+            logger.debug("Consumer: Exchange, queue, and binding setup complete.")
         except Exception as e:
             logger.error(f"Consumer: Error setting up exchange/queue: {e}")
             logger.error(traceback.format_exc())
@@ -132,7 +128,7 @@ class RabbitMQConsumer:
             return
 
         self.is_consuming = True
-        logger.info("Consumer: Starting to consume messages...")
+        logger.debug("Consumer: Starting to consume messages...")
         while self.is_consuming:
             try:
                 if not self._connection or self._connection.is_closed:
@@ -202,7 +198,7 @@ class RabbitMQConsumer:
             # 1. 先尝试取消consumer tag
             if self._channel and self._channel.is_open and self._consumer_tag:
                 self._channel.basic_cancel(self._consumer_tag)
-                logger.info(f"Consumer: Consumer tag {self._consumer_tag} cancelled on stop.")
+                logger.debug(f"Consumer: Consumer tag {self._consumer_tag} cancelled on stop.")
         except Exception as e_cancel:
             logger.error(f"Consumer: Error cancelling consumer tag on stop: {e_cancel}")
         
@@ -210,7 +206,7 @@ class RabbitMQConsumer:
             # 2. 强制关闭channel
             if self._channel and self._channel.is_open:
                 self._channel.close()
-                logger.info("Consumer: Channel closed forcefully.")
+                logger.debug("Consumer: Channel closed forcefully.")
         except Exception as e_channel:
             logger.error(f"Consumer: Error closing channel: {e_channel}")
             
@@ -218,7 +214,7 @@ class RabbitMQConsumer:
             # 3. 强制关闭connection
             if self._connection and self._connection.is_open:
                 self._connection.close()
-                logger.info("Consumer: Connection closed forcefully.")
+                logger.debug("Consumer: Connection closed forcefully.")
         except Exception as e_conn:
             logger.error(f"Consumer: Error closing connection: {e_conn}")
         
