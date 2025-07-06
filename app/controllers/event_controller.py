@@ -205,9 +205,13 @@ def send_message(event_id):
 
     temp_id = data.get('temp_id')
 
+    # 获取当前用户信息
+    current_user = get_current_user()
+    
     message = Message(
         message_id=str(uuid.uuid4()),
         event_id=event_id,
+        user_id=current_user.user_id,
         message_from=data.get('sender', 'user'),
         message_type='user_message',
         message_content=message_content

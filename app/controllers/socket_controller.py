@@ -285,6 +285,17 @@ def broadcast_message(message, extra_data=None):
         if extra_data:
             message_dict.update(extra_data)
         
+        # 如果是用户消息，添加用户信息
+        if message.message_from == 'user' and message.user_id:
+            try:
+                from app.models.models import User
+                user = User.query.filter_by(user_id=message.user_id).first()
+                if user:
+                    message_dict['user_nickname'] = user.nickname or user.username
+                    message_dict['user_username'] = user.username
+            except Exception as e:
+                logger.warning(f"获取用户信息失败: {e}")
+        
         # 保存到数据库（如果尚未保存）
         if message.id is None:
             db.session.add(message)
