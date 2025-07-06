@@ -15,6 +15,7 @@ DeepSOC (Deep Security Operations Center) 是一个基于AI的安全运营中心
 - **[User_Message_Display_Logic.md](User_Message_Display_Logic.md)** - 用户消息显示逻辑技术文档
 
 ### 配置指南
+- **[Development_Guide.md](Development_Guide.md)** - **开发团队必读**：版本管理和开发流程指南
 - **[soar-config-help.md](soar-config-help.md)** - SOAR平台配置帮助文档
 - **[Upgrade_Guide.md](Upgrade_Guide.md)** - 系统升级和数据库迁移指南
 - **[Version_Management.md](Version_Management.md)** - 版本管理和发布流程指南
@@ -25,6 +26,7 @@ DeepSOC (Deep Security Operations Center) 是一个基于AI的安全运营中心
 ## 文档分类
 
 ### 📚 开发指南
+- [Development_Guide.md](Development_Guide.md) - **开发团队必读**：版本管理和开发流程指南
 - [Architecture.md](Architecture.md) - 了解系统整体架构
 - [Agents.md](Agents.md) - 理解多代理系统设计
 - [State_Flow_Design.md](State_Flow_Design.md) - 掌握状态流转机制
@@ -48,9 +50,10 @@ DeepSOC (Deep Security Operations Center) 是一个基于AI的安全运营中心
 3. 参考 [soar-config-help.md](soar-config-help.md) 进行配置
 
 ### 开发者指南
-1. 研究 [State_Flow_Design.md](State_Flow_Design.md) 了解状态管理
-2. 查看 [Engineer_Chat_Architecture.md](Engineer_Chat_Architecture.md) 理解聊天系统
-3. 参考 [User_Message_Display_Logic.md](User_Message_Display_Logic.md) 了解消息显示逻辑
+1. **首先阅读** [Development_Guide.md](Development_Guide.md) 掌握开发流程和版本管理
+2. 研究 [State_Flow_Design.md](State_Flow_Design.md) 了解状态管理
+3. 查看 [Engineer_Chat_Architecture.md](Engineer_Chat_Architecture.md) 理解聊天系统
+4. 参考 [User_Message_Display_Logic.md](User_Message_Display_Logic.md) 了解消息显示逻辑
 
 ### 功能使用
 1. 阅读 [Engineer_Chat_Feature.md](Engineer_Chat_Feature.md) 了解聊天功能
