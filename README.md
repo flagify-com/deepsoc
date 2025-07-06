@@ -379,12 +379,14 @@ DeepSOC群助手微信二维码
 
 详细的技术文档和开发指南请参考：
 
+- **[🚀 开发指导手册](docs/Development_Guide.md)** - **开发团队必读**：版本管理和开发流程
 - **[技术文档目录](docs/README.md)** - 完整的技术文档索引
 - **[系统架构](docs/Architecture.md)** - 系统整体架构设计
 - **[多代理系统](docs/Agents.md)** - 多代理系统详细说明
 - **[工程师聊天系统](docs/Engineer_Chat_Architecture.md)** - 工程师聊天功能架构
 - **[SOAR配置指南](docs/soar-config-help.md)** - SOAR平台配置说明
 - **[系统升级指南](docs/Upgrade_Guide.md)** - 版本升级和数据库迁移
+- **[版本管理详解](docs/Version_Management.md)** - 版本管理技术细节
 - **[开发指南](CLAUDE.md)** - AI助手开发指南
 - **[更新日志](changelog.md)** - 项目更新记录
 
