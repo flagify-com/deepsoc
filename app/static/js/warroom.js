@@ -1907,12 +1907,30 @@ function getSenderName(message) {
     }
     
     if (message.message_from === 'user') {
+        // 优先使用消息中的user_nickname字段
         if (message.user_nickname) {
             return message.user_nickname;
         }
+        
+        // 如果消息中没有user_nickname，尝试通过user_id查找用户信息
+        if (message.user_id) {
+            // 这里可以考虑从本地缓存或其他方式获取用户信息
+            // 但目前先使用localStorage中的信息作为备选
+        }
+        
         try {
             const info = JSON.parse(localStorage.getItem('user_info') || '{}');
-            return info.nickname || info.username || '用户';
+            // 检查当前登录用户的ID是否与消息的user_id匹配
+            if (message.user_id && info.user_id && message.user_id === info.user_id) {
+                // 如果是当前用户的消息，使用localStorage中的信息
+                return info.nickname || info.username || '用户';
+            } else if (message.user_id && info.user_id && message.user_id !== info.user_id) {
+                // 如果是其他用户的消息，但没有user_nickname，显示为"其他用户"
+                return '其他用户';
+            } else {
+                // 无法确定用户身份时的默认显示
+                return info.nickname || info.username || '用户';
+            }
         } catch (e) {
             return '用户';
         }

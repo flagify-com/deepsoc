@@ -113,8 +113,10 @@ def get_event_messages(event_id):
         msg_dict = message.to_dict()
         if message.user_id:
             user = User.query.filter_by(user_id=message.user_id).first()
-            if user and user.nickname:
-                msg_dict['user_nickname'] = user.nickname
+            if user:
+                # 优先使用昵称，如果没有昵称则使用用户名
+                msg_dict['user_nickname'] = user.nickname or user.username
+                msg_dict['user_username'] = user.username  # 同时提供用户名信息
         result.append(msg_dict)
 
     return jsonify({

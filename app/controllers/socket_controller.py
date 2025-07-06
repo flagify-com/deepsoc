@@ -213,6 +213,17 @@ def register_socket_events(socketio):
                 msg_dict['temp_id'] = temp_id
             if user_nickname:
                 msg_dict['user_nickname'] = user_nickname
+            else:
+                # 如果没有获取到用户昵称，尝试再次获取用户信息
+                if user_id:
+                    try:
+                        from app.models.models import User
+                        user = User.query.filter_by(user_id=user_id).first()
+                        if user:
+                            msg_dict['user_nickname'] = user.nickname or user.username
+                            msg_dict['user_username'] = user.username
+                    except Exception as e:
+                        logger.warning(f"获取用户信息失败: {e}")
             emit('new_message', msg_dict, room=event_id)
         except Exception as e:
             logger.error(f"处理消息时出错: {str(e)}")
