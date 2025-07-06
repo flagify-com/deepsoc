@@ -17,6 +17,7 @@ DeepSOC (Deep Security Operations Center) 是一个基于AI的安全运营中心
 ### 配置指南
 - **[soar-config-help.md](soar-config-help.md)** - SOAR平台配置帮助文档
 - **[Upgrade_Guide.md](Upgrade_Guide.md)** - 系统升级和数据库迁移指南
+- **[Version_Management.md](Version_Management.md)** - 版本管理和发布流程指南
 
 ### 图片资源
 - **[images/](images/)** - 文档相关图片资源

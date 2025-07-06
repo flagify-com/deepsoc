@@ -359,9 +359,30 @@
     <!-- Toast通知 -->
     <div id="toast-container" class="toast-container"></div>
 
+    <!-- 版本信息（固定在右下角） -->
+    <div class="position-fixed bottom-0 end-0 p-2" style="z-index: 1000;">
+        <small class="text-muted bg-dark text-white px-2 py-1 rounded" id="warroom-version-info">
+            DeepSOC v1.1.0
+        </small>
+    </div>
+
     <script src="/static/js/bootstrap.bundle.min.js"></script>
     <script src="/static/js/socket.io.min.js"></script>
     <script src="/static/js/marked.min.js"></script>
     <script src="/static/js/warroom.js"></script>
+    
+    <!-- 加载版本信息 -->
+    <script>
+        fetch('/api/version')
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    document.getElementById('warroom-version-info').textContent = `DeepSOC v${data.data.version}`;
+                }
+            })
+            .catch(error => {
+                console.log('无法获取版本信息:', error);
+            });
+    </script>
 </body>
 </html> 

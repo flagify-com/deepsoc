@@ -14,7 +14,13 @@
       "Bash(ps:*)",
       "Bash(pip install:*)",
       "Bash(pip show:*)",
-      "Bash(rg:*)"
+      "Bash(rg:*)",
+      "Bash(find:*)",
+      "Bash(git add:*)",
+      "Bash(mv:*)",
+      "Bash(chmod:*)",
+      "Bash(PYTHONPATH=/tmp/demo_app python /tmp/demo_app/version_manager.py show)",
+      "Bash(rm:*)"
     ],
     "deny": []
   }

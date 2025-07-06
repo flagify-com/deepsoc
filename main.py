@@ -16,9 +16,28 @@ from app.utils.logging_config import configure_logging
 from app.models.models import Prompt
 from app.prompts.default_prompts import DEFAULT_PROMPTS
 from app.utils.mq_consumer import RabbitMQConsumer # Added MQ Consumer
+from app import __version__, get_version, get_version_info
+import sys
 
 # 配置日志
 logger = configure_logging()
+
+# 显示版本信息
+def print_version_info():
+    """打印版本信息"""
+    version_info = get_version_info()
+    version_info['python_version'] = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+    
+    print("=" * 60)
+    print(f"🚀 DeepSOC - AI-Powered Security Operations Center")
+    print("=" * 60)
+    print(f"版本: {version_info['version']}")
+    print(f"发布名称: {version_info['release_name']}")
+    print(f"构建日期: {version_info['build_date']}")
+    print(f"Python 版本: {version_info['python_version']}")
+    print(f"描述: {version_info['description']}")
+    print("=" * 60)
+    logger.info(f"DeepSOC v{version_info['version']} 启动")
 
 # 加载环境变量
 load_dotenv(override=True)
@@ -253,6 +272,17 @@ def health():
         'message': 'DeepSOC API is healthy'
     })
 
+@app.route('/api/version')
+def api_version():
+    """获取系统版本信息API"""
+    version_info = get_version_info()
+    version_info['python_version'] = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+    
+    return jsonify({
+        'status': 'success',
+        'data': version_info
+    })
+
 def create_tables():
     """重新创建数据库表，确保结构最新"""
     with app.app_context():
@@ -314,10 +344,17 @@ def start_agent(role):
         sys.exit(1)
 
 if __name__ == '__main__':
+    # 显示版本信息
+    print_version_info()
+    
     parser = argparse.ArgumentParser(description='DeepSOC - AI驱动的安全运营中心')
     parser.add_argument('-role', type=str, help='Agent角色: _captain, _manager, _operator, _executor, _expert')
     parser.add_argument('-init', action='store_true', help='初始化数据库')
+    parser.add_argument('-version', action='store_true', help='显示版本信息')
     args = parser.parse_args()
+    
+    if args.version:
+        sys.exit(0)
     
     if args.init:
         create_tables()
