@@ -400,3 +400,7 @@ python -c "from app.utils.mq_utils import RabbitMQPublisher; p = RabbitMQPublish
 3. Check routing key format matches: `notifications.frontend.{event_id}.{message_from}.{message_type}`
 4. Verify WebSocket room membership (users must join event rooms)
 5. Ensure message contains required fields: `id`, `message_id`, `message_from`, `message_type`
+
+## Important Notes
+- This product is developed by Chinese engineers, so when you chat with me, please use Chinese.
+- Output some text for me to update changelog each time you finish a feature.

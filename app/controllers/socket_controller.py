@@ -40,70 +40,21 @@ def register_socket_events(socketio):
             if room:
                 logger.info(f"客户端 {request.sid} 正在尝试加入房间: {room}")
                 
-                # 加入房间前检查当前房间状态
+                # 加入房间
                 try:
-                    # 获取当前socketio实例
-                    from main import socketio as app_socketio
-                    
-                    rooms = app_socketio.server.manager.rooms
-                    namespace_rooms = rooms.get('/', {})
-                    clients = namespace_rooms.get(room, set())
-                    logger.info(f"加入前: 房间 {room} 中有 {len(clients)} 个客户端")
-                except Exception as e:
-                    logger.error(f"检查房间状态时出错: {str(e)}")
-                
-                # 🎯 关键修复: 正确的join_room调用方式
-                logger.info(f"尝试加入房间: {room}, 客户端SID: {request.sid}")
-                try:
-                    # Flask-SocketIO join_room的正确调用方式 (不需要namespace参数)
                     join_room(room)
-                    logger.info(f"✅ 客户端 {request.sid} 已调用join_room: {room}")
-                    
-                    # 立即验证是否成功加入
-                    import time
-                    time.sleep(0.1)  # 等待一小段时间让join_room生效
-                    
+                    logger.info(f"✅ 客户端 {request.sid} 已成功加入房间: {room}")
                 except Exception as join_error:
                     logger.error(f"❌ 加入房间失败: {str(join_error)}")
-                
-                # 加入房间后再次检查房间状态 - 使用多种方法验证
-                try:
-                    # 获取当前socketio实例
-                    from main import socketio as app_socketio
-                    
-                    # 方法1: 直接检查manager.rooms
-                    rooms = app_socketio.server.manager.rooms
-                    namespace_rooms = rooms.get('/', {})
-                    clients_method1 = namespace_rooms.get(room, set())
-                    logger.info(f"加入后(方法1): 房间 {room} 中有 {len(clients_method1)} 个客户端")
-                    
-                    # 方法2: 使用server.get_session方法检查
-                    try:
-                        sid_rooms = app_socketio.server.manager.get_rooms(request.sid, '/')
-                        logger.info(f"加入后(方法2): 客户端 {request.sid} 在房间: {sid_rooms}")
-                        is_in_room = room in sid_rooms if sid_rooms else False
-                        logger.info(f"加入后(方法2): 客户端是否在目标房间: {is_in_room}")
-                    except Exception as e2:
-                        logger.error(f"方法2检查失败: {str(e2)}")
-                    
-                    # 方法3: 使用Flask-SocketIO内部方法
-                    try:
-                        import flask_socketio
-                        logger.info(f"加入后(方法3): Flask-SocketIO版本: {flask_socketio.__version__}")
-                    except Exception as e3:
-                        logger.error(f"方法3检查失败: {str(e3)}")
-                    
-                except Exception as e:
-                    logger.error(f"检查房间状态时出错: {str(e)}")
+                    emit('error', {'message': f'加入房间失败: {str(join_error)}'})
+                    return
                 
                 # 发送状态更新
-                emit('status', {'status': 'joined', 'event_id': room}, room=room)
+                emit('status', {'status': 'joined', 'event_id': room})
                 logger.info(f"已发送joined状态到客户端 {request.sid}")
                 
-                # 发送测试消息
+                # 发送测试消息验证连接
                 try:
-                    logger.info(f"正在发送WebSocket测试消息到客户端 {request.sid}")
-                    
                     # 直接发送到当前客户端
                     emit('test_message', {
                         'message': '这是一条测试消息，用于验证WebSocket连接',
@@ -115,22 +66,6 @@ def register_socket_events(socketio):
                         'message': f'客户端 {request.sid} 已加入房间 {room}',
                         'timestamp': datetime.now().isoformat()
                     }, room=room)
-                    
-                    # 🧪 CRITICAL TEST: 发送 new_message 事件进行对比测试
-                    logger.info(f"🧪 发送new_message测试事件")
-                    emit('new_message', {
-                        'test': True,
-                        'id': 999999,  # Test message ID
-                        'message_id': 'socket_controller_test',
-                        'event_id': room,
-                        'message_from': 'socket_controller',
-                        'message_category': 'test',
-                        'message_type': 'chat',
-                        'sender_type': 'system',
-                        'content': '这是来自socket_controller的new_message测试',
-                        'timestamp': datetime.now().isoformat(),
-                        'created_at': datetime.now().isoformat()
-                    })
                     
                     logger.info(f"测试消息已发送")
                 except Exception as e:
@@ -301,58 +236,16 @@ def broadcast_message(message, extra_data=None):
             db.session.add(message)
             db.session.commit()
         
-        logger.info(f"准备广播消息: ID={message.id}, 类型={message.message_type}, 来源={message.message_from}, 事件={event_id}")
-        
-        # 添加更详细的消息内容日志（但避免日志过大）
-        if isinstance(message.message_content, dict):
-            content_preview = str(message.message_content)[:200] + "..." if len(str(message.message_content)) > 200 else str(message.message_content)
-            logger.debug(f"消息内容预览: {content_preview}")
+        logger.info(f"广播消息: ID={message.id}, 类型={message.message_type}, 来源={message.message_from}, 事件={event_id}")
         
         # 检查socketio是否可用
         if not socketio:
             logger.error("socketio对象不可用，无法广播消息")
             return
-            
-        # 检查房间是否有连接的客户端
-        try:
-            # 尝试获取房间中的客户端数量
-            rooms = socketio.server.manager.rooms
-            logger.debug(f"所有房间: {rooms}")
-            
-            # 安全地获取客户端数量
-            namespace_rooms = rooms.get('/', {})
-            clients = namespace_rooms.get(event_id, set())
-            clients_count = len(clients)
-            
-            logger.info(f"房间 {event_id} 中有 {clients_count} 个连接的客户端")
-            if clients_count == 0:
-                logger.warning(f"警告: 房间 {event_id} 中没有连接的客户端，但仍然尝试全局广播")
-        except Exception as e:
-            logger.error(f"获取房间客户端数量时出错: {str(e)}")
         
-        # 尝试广播消息 - 方法1：使用socketio.emit
-        logger.info(f"方法1: 正在通过socketio.emit广播消息到房间: {event_id}, 事件名称: new_message")
+        # 广播消息到房间
         socketio.emit('new_message', message_dict, room=event_id)
-        logger.info(f"方法1: 消息已通过socketio.emit广播")
-        
-        # 尝试广播消息 - 方法2：使用socketio.server.emit
-        try:
-            logger.info(f"方法2: 正在通过socketio.server.emit广播消息到房间: {event_id}")
-            socketio.server.emit('new_message', message_dict, room=event_id, namespace='/')
-            logger.info(f"方法2: 消息已通过socketio.server.emit广播")
-        except Exception as e:
-            logger.error(f"方法2广播消息时出错: {str(e)}")
-        
-        # 尝试广播消息 - 方法3：直接向每个客户端发送
-        try:
-            if clients_count > 0:
-                logger.info(f"方法3: 正在直接向 {clients_count} 个客户端发送消息")
-                for client_sid in clients:
-                    logger.info(f"向客户端 {client_sid} 发送消息")
-                    socketio.emit('new_message', message_dict, room=client_sid)
-                logger.info(f"方法3: 已向所有客户端发送消息")
-        except Exception as e:
-            logger.error(f"方法3广播消息时出错: {str(e)}")
+        logger.info(f"消息已通过WebSocket广播到房间: {event_id}")
         
         # 如果状态发生变化，发送状态更新
         if message.message_type in ['event_summary', 'llm_response']:
