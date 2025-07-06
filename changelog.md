@@ -2,8 +2,22 @@
 
 ## [未发布]
 
-## [1.5.1] - 2025-07-06 - 移除作战室版本信息显示，优化作战室检查逻辑
+## [1.6.0] - 2025-07-06 - 项目清理
 
+### 更新内容
+- **根目录整理**: 清理项目根目录，移除不必要的临时文件和调试文件
+  - 删除所有日志文件（*.log）- 15个临时日志文件
+  - 移动调试文件到tools目录：debug_api.py 等
+  - 移动测试文件到tools目录：test_*.py 等（8个文件）
+  - 删除重复文件：soar_client.py（app/utils/已有）
+  - 删除临时SQL文件：add_user_uuid.sql, truncate_table.sql
+  - 恢复重要文件：initial_data.sql（包含示例数据，初始化时需要）
+  - 删除demo目录：demo_version_app/, cursor_chat/
+  - 删除临时文件：debug_frontend.html, plan.md
+  - 项目根目录现在更加整洁，便于维护和开发
+
+## [1.5.1] - 2025-07-06 - 移除作战室版本信息显示，优化作战室检查逻辑
+### 更新内容
 - 移除了作战室版本信息显示，现在版本信息仅在首页底部显示
 - 优化main.py启动时候的调试信息，去除之前开发阶段预留的调试日志（消息队列）
 - 修复控制台报错：Error - 方法3检查失败: module 'flask_socketio' has no attribute '__version__'
