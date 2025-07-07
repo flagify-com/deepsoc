@@ -14,7 +14,7 @@ from functools import wraps
 from dotenv import load_dotenv
 from app.models import db
 from app.utils.logging_config import configure_logging
-from app.models.models import Prompt
+from app.models.models import Prompt, User
 from app.prompts.default_prompts import DEFAULT_PROMPTS
 from app.utils.mq_consumer import RabbitMQConsumer # Added MQ Consumer
 from app import __version__, get_version, get_version_info
@@ -331,6 +331,33 @@ def create_default_prompts():
         db.session.commit()
         logger.info("默认提示词导入完成")
 
+def create_admin_user():
+    """创建默认管理员用户"""
+    with app.app_context():
+        # 检查admin用户是否已存在
+        existing_admin = User.query.filter_by(username='admin').first()
+        if existing_admin:
+            logger.info("管理员用户已存在，跳过创建")
+            return
+        
+        # 创建admin用户
+        admin_user = User(
+            username='admin',
+            nickname='管理员',
+            email='admin@deepsoc.local',
+            phone='18999990000',
+            role='admin',
+            is_active=True
+        )
+        admin_user.set_password('admin123')
+        db.session.add(admin_user)
+        db.session.commit()
+        
+        logger.info("管理员用户创建成功")
+        logger.info("用户名: admin")
+        logger.info("密码: admin123")
+        logger.info("邮箱: admin@deepsoc.local")
+
 def start_agent(role):
     """启动特定角色的Agent"""
     logger.info(f"启动 {role} Agent")
@@ -359,18 +386,41 @@ if __name__ == '__main__':
     
     parser = argparse.ArgumentParser(description='DeepSOC - AI驱动的安全运营中心')
     parser.add_argument('-role', type=str, help='Agent角色: _captain, _manager, _operator, _executor, _expert')
-    parser.add_argument('-init', action='store_true', help='初始化数据库')
+    parser.add_argument('-init', action='store_true', help='系统初始化：数据库表 + 提示词 + 管理员用户')
+    parser.add_argument('-init-with-demo', action='store_true', help='完整初始化：数据库 + 演示数据（推荐）')
+    parser.add_argument('-load_demo', action='store_true', help='仅加载演示数据（需要已存在的数据库）')
     parser.add_argument('-version', action='store_true', help='显示版本信息')
     args = parser.parse_args()
     
     if args.version:
         sys.exit(0)
     
-    if args.init:
+    if getattr(args, 'init_with_demo', False):
+        logger.info("开始完整初始化（包含演示数据）...")
         create_tables()
-        import_sql_file()
-        # import_sql_file()已经包含提示词初始化，这里不需要再调用create_default_prompts()
-        # create_default_prompts()
+        create_default_prompts()
+        create_admin_user()
+        logger.info("系统初始化完成 - 数据库表、提示词、管理员用户已创建")
+        logger.info("开始加载演示数据...")
+        import_sql_file("sql_data/initial_data.sql")
+        logger.info("演示数据加载完成")
+        logger.info("完整初始化全部完成")
+        sys.exit(0)
+    
+    if args.init:
+        logger.info("开始系统初始化...")
+        create_tables()
+        create_default_prompts()
+        create_admin_user()
+        logger.info("系统初始化完成 - 数据库表、提示词、管理员用户已创建")
+        sys.exit(0)
+    
+    if args.load_demo:
+        logger.info("开始加载演示数据...")
+        import_sql_file("sql_data/initial_data.sql")
+        logger.info("演示数据加载完成")
+        sys.exit(0)
+    
     
     if args.role:
         # When running as an agent, do not start the MQ consumer or web server.
