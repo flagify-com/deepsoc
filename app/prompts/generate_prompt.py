@@ -1,81 +1,43 @@
 #!/usr/bin/env python3
+"""Utility to build prompts for different roles."""
+from app.models.models import Prompt
 
-import os
-import sys
+ROLE_NAMES = {
+    '_captain': 'role_soc_captain',
+    '_manager': 'role_soc_manager',
+    '_operator': 'role_soc_operator',
+    '_expert': 'role_soc_expert',
+}
+
+BACKGROUND_SECURITY = 'background_security'
+BACKGROUND_PLAYBOOKS = 'background_soar_playbooks'
 
 
-def generate_prompt_for_captain():
-    prompt_default = ""
-    with open("prompts/role_soc_captain.md", "r") as f:
-        prompt_default = f.read()
+def generate_prompt(role: str) -> str:
+    """Generate prompt text for the given role."""
+    name = ROLE_NAMES.get(role, '')
+    if not name:
+        return ''
 
-    prompt_background = ""
-    with open("prompts/background_security.md", "r") as f:
-        prompt_background = f.read()
+    role_prompt = Prompt.query.filter_by(name=name).first()
+    if not role_prompt:
+        return ''
 
-    prompt = prompt_default.replace("{background_info}", prompt_background)
+    background = Prompt.query.filter_by(name=BACKGROUND_SECURITY).first()
+    playbooks = Prompt.query.filter_by(name=BACKGROUND_PLAYBOOKS).first()
 
+    prompt = role_prompt.content
+    prompt = prompt.replace('{background_info}', background.content if background else '')
+    prompt = prompt.replace('{playbook_list}', playbooks.content if playbooks else '')
     return prompt
 
 
-def generate_prompt_for_analyst():
-    prompt_default = ""
-    with open("prompts/role_soc_analyst.md", "r") as f:
-        prompt_default = f.read()
-
-    prompt_background = ""
-    with open("prompts/background_security.md", "r") as f:
-        prompt_background = f.read()
-
-    prompt_playbooks = ""
-    with open("prompts/background_soar_playbooks.md", "r") as f:
-        prompt_playbooks = f.read()
-
-    prompt = prompt_default.replace("{background_info}", prompt_background)
-    prompt = prompt.replace("{playbook_list}", prompt_playbooks)
-
-    return prompt
+def main():
+    for role in ROLE_NAMES:
+        text = generate_prompt(role)
+        print(f"==== {role} ====")
+        print(text[:200] + ('...' if len(text) > 200 else ''))
 
 
-
-def generate_prompt_for_responder():
-    prompt_default = ""
-    with open("prompts/role_soc_responder.md", "r") as f:
-        prompt_default = f.read()
-
-    prompt_background = ""
-    with open("prompts/background_security.md", "r") as f:
-        prompt_background = f.read()
-
-    playbook_list = ""
-    with open("prompts/background_soar_playbooks.md", "r") as f:
-        playbook_list = f.read()
-
-    prompt = prompt_default.replace("{background_info}", prompt_background)
-    prompt = prompt.replace("{playbook_list}", playbook_list)
-
-    return prompt
-
-def generate_prompt_for_operator():
-    prompt_default = ""
-    with open("prompts/role_soc_operator.md", "r") as f:
-        prompt_default = f.read()
-
-    background_info = ""
-    with open("prompts/background_security.md", "r") as f:
-        background_info = f.read()
-
-    playbook_list = ""
-    with open("prompts/background_soar_playbooks.md", "r") as f:
-        playbook_list = f.read()
-
-    prompt = prompt_default.replace("{background_info}", background_info)
-    prompt = prompt.replace("{playbook_list}", playbook_list)
-
-    return prompt
-
-if __name__ == "__main__":
-    generate_prompt_for_commander()
-    generate_prompt_for_analyst()
-    generate_prompt_for_responder()
-    generate_prompt_for_operator()
+if __name__ == '__main__':
+    main()

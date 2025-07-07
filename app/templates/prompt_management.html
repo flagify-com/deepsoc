@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>提示词管理 - DeepSOC</title>
+    <link rel="stylesheet" href="/static/css/bootstrap.min.css">
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-4">
+        <div class="container">
+            <a class="navbar-brand d-flex align-items-center" href="/">
+                <img src="/static/images/logo/logo.png" alt="DeepSOC Logo" height="30" class="me-2">
+                DeepSOC
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/">首页</a>
+                    </li>
+                    <li class="nav-item d-none" id="user-management-nav-item">
+                        <a class="nav-link" href="/user-management">用户管理</a>
+                    </li>
+                    <li class="nav-item dropdown" id="settings-nav-item">
+                        <a class="nav-link dropdown-toggle active" href="#" id="settings-dropdown" role="button" data-bs-toggle="dropdown">设置</a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item active" href="/settings/prompts">提示词管理</a></li>
+                            <li><a class="dropdown-item" href="/settings/background-security">安全背景</a></li>
+                            <li><a class="dropdown-item" href="/settings/soar-playbooks">SOAR剧本</a></li>
+                            <li><a class="dropdown-item" href="/settings/mcp-tools">MCP Tools</a></li>
+                        </ul>
+                    </li>
+                </ul>
+                <ul class="navbar-nav">
+                    <li class="nav-item" id="login-nav-item">
+                        <a class="nav-link" href="/login">登录</a>
+                    </li>
+                    <li class="nav-item dropdown d-none" id="user-nav-item">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                            <span id="user-info">用户</span>
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li><a class="dropdown-item" href="/change-password">修改密码</a></li>
+                            <li><a class="dropdown-item" href="#" id="logout-btn">退出登录</a></li>
+                        </ul>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <h1 class="mb-4">提示词管理</h1>
+        <div class="row">
+            <div class="col-md-3 mb-3">
+                <div class="list-group" id="prompt-nav">
+                    <a class="list-group-item list-group-item-action active" data-target="_captain" href="#_captain">指挥官</a>
+                    <a class="list-group-item list-group-item-action" data-target="_manager" href="#_manager">安全经理</a>
+                    <a class="list-group-item list-group-item-action" data-target="_operator" href="#_operator">操作员</a>
+                    <a class="list-group-item list-group-item-action" data-target="_expert" href="#_expert">安全专家</a>
+                </div>
+            </div>
+            <div class="col-md-9" id="prompt-container">
+                <div class="card mb-4 prompt-section" data-role="_captain">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">指挥官</h5>
+                        <button class="btn btn-sm btn-primary save-prompt-btn" data-role="_captain">保存</button>
+                    </div>
+                    <div class="card-body">
+                        <textarea class="form-control" rows="12" id="prompt-_captain"></textarea>
+                    </div>
+                </div>
+                <div class="card mb-4 prompt-section d-none" data-role="_manager">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">安全经理</h5>
+                        <button class="btn btn-sm btn-primary save-prompt-btn" data-role="_manager">保存</button>
+                    </div>
+                    <div class="card-body">
+                        <textarea class="form-control" rows="12" id="prompt-_manager"></textarea>
+                    </div>
+                </div>
+                <div class="card mb-4 prompt-section d-none" data-role="_operator">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">操作员</h5>
+                        <button class="btn btn-sm btn-primary save-prompt-btn" data-role="_operator">保存</button>
+                    </div>
+                    <div class="card-body">
+                        <textarea class="form-control" rows="12" id="prompt-_operator"></textarea>
+                    </div>
+                </div>
+                <div class="card mb-4 prompt-section d-none" data-role="_expert">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">安全专家</h5>
+                        <button class="btn btn-sm btn-primary save-prompt-btn" data-role="_expert">保存</button>
+                    </div>
+                    <div class="card-body">
+                        <textarea class="form-control" rows="12" id="prompt-_expert"></textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast-container" class="toast-container position-fixed bottom-0 end-0 p-3"></div>
+
+    <script src="/static/js/bootstrap.bundle.min.js"></script>
+    <script src="/static/js/prompt_management.js"></script>
+</body>
+</html>

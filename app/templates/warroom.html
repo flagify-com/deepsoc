@@ -21,8 +21,13 @@
             <div class="event-header">
                 <div class="event-title">
                     <div class="d-flex align-items-center">
-                        <img src="/static/images/logo/logo.png" alt="DeepSOC Logo" class="logo-img me-3" style="height: 36px;">
+                        <a href="/">
+                            <img src="/static/images/logo/logo.png" alt="DeepSOC Logo" class="logo-img me-3" style="height: 36px;">
+                        </a>
                         <h1 id="event-name">加载中...</h1>
+                        <button id="event-tree-btn" class="cyber-btn small ms-2" title="关系树">
+                            <i class="bi bi-diagram-3"></i>
+                        </button>
                     </div>
                     <div class="event-status-container">
                         <div id="connection-status" class="status-connecting">连接中...</div>
@@ -55,10 +60,13 @@
             <!-- 输入区域 -->
             <div class="chat-input-container">
                 <div class="chat-input-wrapper">
-                    <input type="text" id="user-input" class="chat-input" placeholder="输入指令...">
+                    <input type="text" id="user-input" class="chat-input" placeholder="输入消息... (使用@AI向AI助手提问)">
                     <button id="send-button" class="cyber-btn">
                         <span class="cyber-btn-text">发送</span>
                     </button>
+                </div>
+                <div class="input-help-text">
+                    <span>💡 使用提示：输入 <strong>@AI 问题内容</strong> 与AI助手对话，普通消息作为作战室聊天记录</span>
                 </div>
             </div>
         </div>
@@ -211,11 +219,11 @@
             <div class="cyber-modal-body">
                 <div class="event-detail-section">
                     <h3>原始信息</h3>
-                    <div id="event-message-detail" class="event-message-detail"></div>
+                    <div id="event-message-detail" class="event-message-detail markdown-content"></div>
                 </div>
                 <div class="event-detail-section">
                     <h3>上下文信息</h3>
-                    <div id="event-context-detail" class="event-context-detail"></div>
+                    <div id="event-context-detail" class="event-context-detail markdown-content"></div>
                 </div>
                 <div class="event-detail-section">
                     <h3>事件总结</h3>
@@ -243,10 +251,26 @@
         <div class="cyber-modal-content">
             <div class="cyber-modal-header">
                 <h2>消息源码</h2>
+                <button id="copy-message-source" class="copy-btn" title="复制源码" onclick="copyMessageSource()">
+                    <i class="fas fa-copy"></i>
+                </button>
                 <button class="cyber-modal-close">&times;</button>
             </div>
             <div class="cyber-modal-body">
                 <div id="message-source-content" class="markdown-content"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 事件关系树模态框 -->
+    <div id="event-tree-modal" class="cyber-modal">
+        <div class="cyber-modal-content">
+            <div class="cyber-modal-header">
+                <h2>事件关系树</h2>
+                <button class="cyber-modal-close">&times;</button>
+            </div>
+            <div class="cyber-modal-body">
+                <div id="event-tree-container" class="event-tree-container"></div>
             </div>
         </div>
     </div>
@@ -335,9 +359,11 @@
     <!-- Toast通知 -->
     <div id="toast-container" class="toast-container"></div>
 
+
     <script src="/static/js/bootstrap.bundle.min.js"></script>
     <script src="/static/js/socket.io.min.js"></script>
     <script src="/static/js/marked.min.js"></script>
     <script src="/static/js/warroom.js"></script>
+    
 </body>
 </html> 

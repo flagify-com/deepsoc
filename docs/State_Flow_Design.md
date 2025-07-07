@@ -19,6 +19,7 @@
 | `tasks_completed` | 事件当前轮次的所有任务已完成 | Expert检测到所有任务和执行都完成时设置 |
 | `to_be_summarized` | 事件已标记为待生成总结 | Expert标记事件准备生成总结时设置 |
 | `summarized` | 事件总结已生成 | Expert完成事件总结生成时设置 |
+| `summary_failed` | 总结生成失败 | 调用LLM或生成总结过程中出错时设置 |
 | `round_finished` | 当前轮次处理完成 | Expert在总结生成后设置 |
 | `failed` | 事件处理失败 | 任务执行过程中出现不可恢复的错误时设置 |
 | `completed` | 事件全部处理完成 | 达到最大轮次或解决方案有效时设置 |
@@ -60,6 +61,7 @@
 | `processing` | 执行正在处理中 | 开始执行命令时设置 |
 | `completed` | 执行完成但尚未生成摘要 | 命令执行完成但尚未生成摘要时设置 |
 | `summarized` | 执行结果已生成摘要 | Expert生成执行结果摘要后设置 |
+| `summarized_error` | 摘要生成失败 | 生成执行结果摘要过程中出现错误时设置 |
 | `failed` | 执行失败 | 命令执行过程中出现错误时设置 |
 
 ## 3. 状态流转流程
@@ -141,6 +143,18 @@
 3. `processing`/`waiting` → `completed`: 执行完成但尚未生成摘要
 4. `completed` → `summarized`: Expert生成执行结果摘要
 5. `processing`/`waiting` → `failed`: 执行过程中出现错误
+
+### 3.6 事件到执行的状态递进及轮次逻辑
+
+1. 新事件创建后处于 `pending` 状态，`current_round` 默认为 1。
+2. Captain 服务拉取 `pending` 事件，设置为 `processing` 并调用大模型生成任务（Task）。
+3. 任务创建后为 `pending`，由 Manager 服务取出后标记为 `processing`，并根据任务内容生成动作（Action）。
+4. Operator 服务处理 `pending` 动作，生成具体命令（Command），命令随后被 Executor 服务拉取执行，状态从 `pending` → `processing`。
+5. 执行过程中会创建 Execution，状态依次经历 `pending`、`processing`/`waiting`、`completed`。Expert 服务为 `completed` 的执行生成摘要，状态更新为 `summarized` 或 `summarized_error`。
+6. 当命令的所有执行都进入终态后，命令状态更新为 `completed`/`failed`，并依次向上触发动作、任务状态更新。
+7. 当前轮次所有任务完成后，事件状态变为 `tasks_completed`，随后在生命周期管理器中依次流转至 `to_be_summarized`、`summarized`、`round_finished`。
+8. 若事件未结束且未达到最大轮次，`advance_event_to_next_round` 会将 `current_round` 加一，并把事件状态重新置为 `pending`，开始下一轮处理。
+9. 当事件被人工 `resolved` 或达到设定最大轮次后，会生成最终总结，事件状态置为 `completed`。
 
 ## 4. 优化设计与实现建议
 

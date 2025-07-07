@@ -27,5 +27,8 @@ def configure_logging():
     logging.getLogger('werkzeug').setLevel(logging.WARNING)
     logging.getLogger('socketio').setLevel(logging.WARNING)
     logging.getLogger('engineio').setLevel(logging.WARNING)
+    logging.getLogger('pika').setLevel(logging.WARNING)
+    logging.getLogger('pika.adapters').setLevel(logging.WARNING)
+    logging.getLogger('pika.adapters.utils').setLevel(logging.WARNING)
     
     return root_logger 

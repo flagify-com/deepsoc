@@ -40,43 +40,21 @@ def register_socket_events(socketio):
             if room:
                 logger.info(f"客户端 {request.sid} 正在尝试加入房间: {room}")
                 
-                # 加入房间前检查当前房间状态
-                try:
-                    # 获取当前socketio实例
-                    from main import socketio as app_socketio
-                    
-                    rooms = app_socketio.server.manager.rooms
-                    namespace_rooms = rooms.get('/', {})
-                    clients = namespace_rooms.get(room, set())
-                    logger.info(f"加入前: 房间 {room} 中有 {len(clients)} 个客户端")
-                except Exception as e:
-                    logger.error(f"检查房间状态时出错: {str(e)}")
-                
                 # 加入房间
-                join_room(room)
-                logger.info(f"客户端 {request.sid} 已加入房间: {room}")
-                
-                # 加入房间后再次检查房间状态
                 try:
-                    # 获取当前socketio实例
-                    from main import socketio as app_socketio
-                    
-                    rooms = app_socketio.server.manager.rooms
-                    namespace_rooms = rooms.get('/', {})
-                    clients = namespace_rooms.get(room, set())
-                    logger.info(f"加入后: 房间 {room} 中有 {len(clients)} 个客户端")
-                    logger.debug(f"房间 {room} 中的客户端: {clients}")
-                except Exception as e:
-                    logger.error(f"检查房间状态时出错: {str(e)}")
+                    join_room(room)
+                    logger.info(f"✅ 客户端 {request.sid} 已成功加入房间: {room}")
+                except Exception as join_error:
+                    logger.error(f"❌ 加入房间失败: {str(join_error)}")
+                    emit('error', {'message': f'加入房间失败: {str(join_error)}'})
+                    return
                 
                 # 发送状态更新
-                emit('status', {'status': 'joined', 'event_id': room}, room=room)
+                emit('status', {'status': 'joined', 'event_id': room})
                 logger.info(f"已发送joined状态到客户端 {request.sid}")
                 
-                # 发送测试消息
+                # 发送测试消息验证连接
                 try:
-                    logger.info(f"正在发送WebSocket测试消息到客户端 {request.sid}")
-                    
                     # 直接发送到当前客户端
                     emit('test_message', {
                         'message': '这是一条测试消息，用于验证WebSocket连接',
@@ -119,6 +97,7 @@ def register_socket_events(socketio):
             event_id = data.get('event_id')
             message_content = data.get('message')
             sender = data.get('sender', 'user')
+            temp_id = data.get('temp_id')
             
             if not event_id or not message_content:
                 emit('error', {'message': '缺少必要参数'})
@@ -131,9 +110,29 @@ def register_socket_events(socketio):
                 return
             
             # 创建消息
+            user_id = None
+            user_nickname = None
+            try:
+                from flask_jwt_extended import decode_token
+                token = request.cookies.get('access_token') or request.headers.get('Authorization', '')
+                if token and token.startswith('Bearer '):
+                    token = token.split(' ', 1)[1]
+                if token:
+                    decoded = decode_token(token)
+                    username = decoded.get('sub')
+                    if username:
+                        from app.models.models import User
+                        user = User.query.filter_by(username=username).first()
+                        if user:
+                            user_id = user.user_id
+                            user_nickname = user.nickname
+            except Exception as auth_error:
+                logger.warning(f"解析用户身份失败: {auth_error}")
+
             message = Message(
                 message_id=str(uuid.uuid4()),
                 event_id=event_id,
+                user_id=user_id,
                 message_from=sender,
                 message_type='user_message',
                 message_content=message_content
@@ -143,11 +142,24 @@ def register_socket_events(socketio):
             db.session.add(message)
             db.session.commit()
             
-            # 广播消息
-            emit('new_message', message.to_dict(), room=event_id)
-            
-            # 触发AI响应
-            trigger_ai_response(event_id, message)
+            # 广播消息，并带上临时ID以便前端替换
+            msg_dict = message.to_dict()
+            if temp_id:
+                msg_dict['temp_id'] = temp_id
+            if user_nickname:
+                msg_dict['user_nickname'] = user_nickname
+            else:
+                # 如果没有获取到用户昵称，尝试再次获取用户信息
+                if user_id:
+                    try:
+                        from app.models.models import User
+                        user = User.query.filter_by(user_id=user_id).first()
+                        if user:
+                            msg_dict['user_nickname'] = user.nickname or user.username
+                            msg_dict['user_username'] = user.username
+                    except Exception as e:
+                        logger.warning(f"获取用户信息失败: {e}")
+            emit('new_message', msg_dict, room=event_id)
         except Exception as e:
             logger.error(f"处理消息时出错: {str(e)}")
             logger.error(traceback.format_exc())
@@ -193,7 +205,7 @@ def register_socket_events(socketio):
             logger.error(traceback.format_exc())
             emit('error', {'message': f'处理测试连接请求时出错: {str(e)}'})
 
-def broadcast_message(message):
+def broadcast_message(message, extra_data=None):
     """广播消息到特定作战室
     
     Args:
@@ -205,66 +217,35 @@ def broadcast_message(message):
         # 通过WebSocket推送消息
         event_id = message.event_id
         message_dict = message.to_dict()
+        if extra_data:
+            message_dict.update(extra_data)
+        
+        # 如果是用户消息，添加用户信息
+        if message.message_from == 'user' and message.user_id:
+            try:
+                from app.models.models import User
+                user = User.query.filter_by(user_id=message.user_id).first()
+                if user:
+                    message_dict['user_nickname'] = user.nickname or user.username
+                    message_dict['user_username'] = user.username
+            except Exception as e:
+                logger.warning(f"获取用户信息失败: {e}")
         
         # 保存到数据库（如果尚未保存）
         if message.id is None:
             db.session.add(message)
             db.session.commit()
         
-        logger.info(f"准备广播消息: ID={message.id}, 类型={message.message_type}, 来源={message.message_from}, 事件={event_id}")
-        
-        # 添加更详细的消息内容日志（但避免日志过大）
-        if isinstance(message.message_content, dict):
-            content_preview = str(message.message_content)[:200] + "..." if len(str(message.message_content)) > 200 else str(message.message_content)
-            logger.debug(f"消息内容预览: {content_preview}")
+        logger.info(f"广播消息: ID={message.id}, 类型={message.message_type}, 来源={message.message_from}, 事件={event_id}")
         
         # 检查socketio是否可用
         if not socketio:
             logger.error("socketio对象不可用，无法广播消息")
             return
-            
-        # 检查房间是否有连接的客户端
-        try:
-            # 尝试获取房间中的客户端数量
-            rooms = socketio.server.manager.rooms
-            logger.debug(f"所有房间: {rooms}")
-            
-            # 安全地获取客户端数量
-            namespace_rooms = rooms.get('/', {})
-            clients = namespace_rooms.get(event_id, set())
-            clients_count = len(clients)
-            
-            logger.info(f"房间 {event_id} 中有 {clients_count} 个连接的客户端")
-            if clients_count == 0:
-                logger.warning(f"警告: 房间 {event_id} 中没有连接的客户端，消息可能无法送达")
-                # 如果没有客户端，仍然保存消息到数据库，但不尝试广播
-                return
-        except Exception as e:
-            logger.error(f"获取房间客户端数量时出错: {str(e)}")
         
-        # 尝试广播消息 - 方法1：使用socketio.emit
-        logger.info(f"方法1: 正在通过socketio.emit广播消息到房间: {event_id}, 事件名称: new_message")
+        # 广播消息到房间
         socketio.emit('new_message', message_dict, room=event_id)
-        logger.info(f"方法1: 消息已通过socketio.emit广播")
-        
-        # 尝试广播消息 - 方法2：使用socketio.server.emit
-        try:
-            logger.info(f"方法2: 正在通过socketio.server.emit广播消息到房间: {event_id}")
-            socketio.server.emit('new_message', message_dict, room=event_id, namespace='/')
-            logger.info(f"方法2: 消息已通过socketio.server.emit广播")
-        except Exception as e:
-            logger.error(f"方法2广播消息时出错: {str(e)}")
-        
-        # 尝试广播消息 - 方法3：直接向每个客户端发送
-        try:
-            if clients_count > 0:
-                logger.info(f"方法3: 正在直接向 {clients_count} 个客户端发送消息")
-                for client_sid in clients:
-                    logger.info(f"向客户端 {client_sid} 发送消息")
-                    socketio.emit('new_message', message_dict, room=client_sid)
-                logger.info(f"方法3: 已向所有客户端发送消息")
-        except Exception as e:
-            logger.error(f"方法3广播消息时出错: {str(e)}")
+        logger.info(f"消息已通过WebSocket广播到房间: {event_id}")
         
         # 如果状态发生变化，发送状态更新
         if message.message_type in ['event_summary', 'llm_response']:

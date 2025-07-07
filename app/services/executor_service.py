@@ -208,8 +208,16 @@ def run_executor():
                     # 处理每个命令
                     for command in pending_commands:
                         process_command(command)
+                    # 命令处理完后提交，释放锁
+                    try:
+                        db.session.commit()
+                    except Exception as loop_commit_err:
+                        logger.error(f"Executor 主循环提交事务失败: {loop_commit_err}")
+                        db.session.rollback()
                 else:
                     logger.info("没有待处理命令，等待中...")
+                    # 回滚事务，避免长事务
+                    db.session.rollback()
                     time.sleep(5)
             except Exception as e:
                 logger.error(f"处理命令时出错: {str(e)}")

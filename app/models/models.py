@@ -11,8 +11,11 @@ class User(db.Model):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = db.Column(db.String(64), default=lambda: str(uuid.uuid4()), unique=True, nullable=False)
     username = db.Column(db.String(64), nullable=False, unique=True)
+    nickname = db.Column(db.String(64))
     email = db.Column(db.String(120), nullable=False, unique=True)
+    phone = db.Column(db.String(32))
     password_hash = db.Column(db.String(256), nullable=False)
     role = db.Column(db.String(32), default='user')  # admin, user
     last_login_at = db.Column(db.DateTime)
@@ -29,8 +32,11 @@ class User(db.Model):
     def to_dict(self):
         return {
             'id': self.id,
+            'user_id': self.user_id,
             'username': self.username,
+            'nickname': self.nickname,
             'email': self.email,
+            'phone': self.phone,
             'role': self.role,
             'last_login_at': self.last_login_at.isoformat() if self.last_login_at else None,
             'is_active': self.is_active,
@@ -49,7 +55,7 @@ class Event(db.Model):
     context = db.Column(db.Text)
     source = db.Column(db.String(64))
     severity = db.Column(db.String(32))
-    status = db.Column(db.String(32), default='pending')
+    event_status = db.Column(db.String(32), default='pending')
     current_round = db.Column(db.Integer, default=1)  # 当前处理轮次，默认为1
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -63,7 +69,8 @@ class Event(db.Model):
             'context': self.context,
             'source': self.source,
             'severity': self.severity,
-            'status': self.status,
+            'event_status': self.event_status,
+            'status': self.event_status,  # backward compatibility
             'current_round': self.current_round,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
@@ -213,10 +220,16 @@ class Message(db.Model):
     id = Column(Integer, primary_key=True, autoincrement=True)
     message_id = Column(String(64), default=lambda: str(uuid.uuid4()), unique=True, nullable=False)
     event_id = Column(String(64))  # 关联的事件ID
+    user_id = Column(String(64))
     message_from = Column(String(64))
     round_id = db.Column(db.Integer)
     message_content = Column(JSON)
     message_type = Column(String(32))
+    # 工程师对话相关字段
+    message_category = Column(String(32), default='agent')  # 'agent' or 'engineer_chat'
+    chat_session_id = Column(String(64))  # 工程师对话会话ID
+    sender_type = Column(String(32))  # 'user', 'ai', 'agent'
+    event_summary_version = Column(String(64))  # 事件概要版本哈希
     created_at = Column(DateTime, default=func.now())
     updated_at = Column(DateTime, default=func.now(), onupdate=func.now())
     
@@ -225,10 +238,15 @@ class Message(db.Model):
             'id': self.id,
             'message_id': self.message_id,
             'event_id': self.event_id,
+            'user_id': self.user_id,
             'message_from': self.message_from,
             'round_id': self.round_id,
             'message_content': self.message_content,
             'message_type': self.message_type,
+            'message_category': self.message_category,
+            'chat_session_id': self.chat_session_id,
+            'sender_type': self.sender_type,
+            'event_summary_version': self.event_summary_version,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }
@@ -291,4 +309,41 @@ class LLMRecord(db.Model):
             'completion_tokens': self.completion_tokens,
             'total_tokens': self.total_tokens,
             'cached_tokens': self.cached_tokens
-        } 
+        }
+
+
+class Prompt(db.Model):
+    """存储提示词和背景信息"""
+    __tablename__ = 'prompts'
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    name = db.Column(db.String(64), unique=True, nullable=False)
+    content = db.Column(db.Text, default='')
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'name': self.name,
+            'content': self.content,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+
+class GlobalSetting(db.Model):
+    """全局设置表，用于存储系统级状态"""
+    __tablename__ = 'global_settings'
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    key = db.Column(db.String(64), unique=True, nullable=False)
+    value = db.Column(db.String(256), nullable=True)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            'key': self.key,
+            'value': self.value,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+        }

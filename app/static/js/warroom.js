@@ -57,6 +57,9 @@ const elements = {
     commandCount: document.getElementById('command-count'),
     modeSwitch: document.getElementById('mode-switch'),
     eventDetailsBtn: document.getElementById('event-details-btn'),
+    eventTreeBtn: document.getElementById('event-tree-btn'),
+    eventTreeModal: document.getElementById('event-tree-modal'),
+    eventTreeContainer: document.getElementById('event-tree-container'),
     eventDetailsModal: document.getElementById('event-details-modal'),
     roleHistoryModal: document.getElementById('role-history-modal'),
     messageSourceModal: document.getElementById('message-source-modal'),
@@ -85,6 +88,7 @@ const elements = {
 
 // 存储所有消息的映射，用于源码查看
 const messagesMap = new Map();
+let currentSourceMessageId = null;
 
 // 页面加载完成后执行
 document.addEventListener('DOMContentLoaded', function() {
@@ -167,6 +171,9 @@ function initWarRoom() {
     
     // 加载事件统计
     fetchEventStats();
+
+    // 获取当前驾驶模式
+    fetchDrivingMode();
     
     // 加载等待处理的执行任务
     fetchWaitingExecutions();
@@ -365,32 +372,40 @@ function setupSocketEventListeners() {
     socket.on('new_message', (message) => {
         console.log('%c[WebSocket] 收到新消息:', 'background: #4CAF50; color: white; padding: 2px 5px; border-radius: 3px;', message);
         
-        // 检查消息格式
-        if (!message || !message.id) {
-            console.error('%c[WebSocket] 收到的消息格式无效:', 'color: #F44336;', message);
-            return;
+        // 工程师对话消息的特殊处理
+        if (message.message_category === 'engineer_chat') {
+            console.log('%c[工程师对话] 收到工程师对话消息', 'background: #FF9800; color: white; padding: 2px 5px; border-radius: 3px;', {
+                sender_type: message.sender_type,
+                message_id: message.message_id,
+                content_preview: typeof message.message_content === 'object' ? 
+                    message.message_content.content?.substring(0, 50) + '...' : 
+                    message.message_content?.substring(0, 50) + '...'
+            });
+            
+            // 如果是AI回复，隐藏思考指示器
+            if (message.sender_type === 'ai') {
+                hideAIThinkingIndicator();
+                console.log('%c[工程师对话] 收到AI回复，隐藏思考指示器', 'color: #4CAF50;');
+            }
         }
         
-        // 检查消息ID
-        console.log(`%c[WebSocket] 消息ID: ${message.id}, 当前最后消息ID: ${lastMessageId}`, 'color: #4CAF50;');
+        // 直接调用新的 addMessage 函数，它会处理去重和状态更新
+        const added = addMessage(message);
+        console.log(`%c[WebSocket] 消息添加结果: ${added ? '成功' : '失败/重复'}`, added ? 'color: #4CAF50;' : 'color: #FFA500;');
         
-        if (!displayedMessages.has(message.id)) {
-            console.log(`%c[WebSocket] 添加新消息 ID:${message.id}, 类型:${message.message_type}, 来源:${message.message_from}`, 'color: #4CAF50;');
-            addMessage(message);
-            displayedMessages.add(message.id);
-            lastMessageId = Math.max(lastMessageId, message.id);
+        if (added) {
             scrollToBottom();
             
-            // 如果有新任务或状态变化，刷新统计和事件详情
-            if (message.message_type === 'llm_response' || 
+            // 如果有新任务或状态变化，刷新统计和事件详情 (此逻辑保留)
+            if (message.message_type === 'llm_response' ||
                 message.message_type === 'command_result' ||
                 message.message_type === 'execution_summary' ||
-                message.message_type === 'event_summary') {
+                message.message_type === 'execution_summary_generated' ||
+                message.message_type === 'event_summary' ||
+                message.message_type === 'event_summary_generated') {
                 fetchEventStats();
                 fetchEventDetails();
             }
-        } else {
-            console.log(`%c[WebSocket] 忽略重复消息 ID:${message.id}`, 'color: #FFA500;');
         }
     });
     
@@ -571,6 +586,10 @@ function initEventListeners() {
     if (elements.eventDetailsBtn) {
         elements.eventDetailsBtn.addEventListener('click', showEventDetailsModal);
     }
+
+    if (elements.eventTreeBtn) {
+        elements.eventTreeBtn.addEventListener('click', showEventTreeModal);
+    }
     
     // 关闭模态框按钮点击事件
     document.querySelectorAll('.cyber-modal-close').forEach(btn => {
@@ -741,8 +760,8 @@ function displayEventDetails(event) {
     const statusElement = elements.eventStatus;
     const statusText = statusElement.querySelector('.status-text');
     
-    statusElement.className = `event-status ${event.status}`;
-    statusText.textContent = getStatusText(event.status);
+    statusElement.className = `event-status ${event.event_status}`;
+    statusText.textContent = getStatusText(event.event_status);
     
     // 更新当前轮次
     elements.currentRound.textContent = event.current_round || 1;
@@ -753,10 +772,9 @@ async function fetchEventMessages() {
     try {
         updateLoadingState('messages', true);
         
-        // 获取所有消息或从上次ID开始
         const lastId = messagesData.length > 0 ? Math.max(...messagesData.map(m => m.id)) : 0;
         
-        const response = await fetch(`/api/event/${eventId}/messages?last_id=${lastId}`, {
+        const response = await fetch(`/api/event/${eventId}/messages?last_message_db_id=${lastId}`, {
             headers: getAuthHeaders(),
             credentials: 'include'
         });
@@ -768,17 +786,16 @@ async function fetchEventMessages() {
         const data = await response.json();
         
         if (data.status === 'success') {
-            // 添加新消息
+            let newMessagesAdded = false;
             if (data.data.length > 0) {
                 for (const message of data.data) {
-                    // 检查是否已存在相同ID的消息
-                    if (!messagesData.some(m => m.id === message.id)) {
-                        messagesData.push(message);
-                        addMessage(message);
+                    // 直接调用新的 addMessage 函数，它会处理去重和状态更新
+                    if (addMessage(message)) {
+                        newMessagesAdded = true;
                     }
                 }
-                
-                // 滚动到底部
+            }
+            if (newMessagesAdded) {
                 scrollToBottom();
             }
         }
@@ -822,9 +839,43 @@ function updateEventStats(stats) {
 
 // 添加消息
 function addMessage(message) {
-    // 将消息存储到映射中，用于源码查看
-    messagesMap.set(message.message_id, message);
-    
+    if (!message) {
+        console.error('[addMessage] 消息对象无效:', message);
+        return false;
+    }
+
+    const uniqueKey = message.temp_id ? `tmp_${message.temp_id}` : `id_${message.message_id || message.id}`;
+
+    // 如果存在同temp_id的待确认消息，先移除
+    if (message.temp_id) {
+        const pendingEl = document.getElementById(`msg-${message.temp_id}`);
+        if (pendingEl) {
+            pendingEl.remove();
+            displayedMessages.delete(`tmp_${message.temp_id}`);
+            const idx = messagesData.findIndex(m => m.temp_id === message.temp_id);
+            if (idx !== -1) messagesData.splice(idx, 1);
+        }
+    }
+
+    if (displayedMessages.has(uniqueKey)) {
+        console.log(`%c[addMessage] 忽略重复消息 ${uniqueKey}`, 'color: #FFA500;');
+        return false;
+    }
+
+    console.log(`%c[addMessage] 添加新消息 ${uniqueKey}, 类型:${message.message_type || 'undefined'}, 来源:${message.message_from || 'undefined'}`, 'color: #4CAF50;');
+    console.log('[addMessage] 消息详情:', message);
+
+    displayedMessages.add(uniqueKey);
+    messagesData.push(message);
+    if (message.message_id) {
+        messagesMap.set(message.message_id, message);
+    }
+
+    // 2. 更新 lastMessageId (虽然其直接用途可能需要重新评估，但为保持一致性暂时保留)
+    // lastMessageId = Math.max(lastMessageId, message.id);
+    // 注意: fetchEventMessages 中计算 lastId 的方式 (从 messagesData 获取最大值) 更可靠
+
+    // 3. 创建DOM元素并追加 (以下为原 addMessage 中的渲染逻辑)
     const messageElement = document.createElement('div');
     
     // 设置消息样式
@@ -841,24 +892,33 @@ function addMessage(message) {
         messageClass += ' message-expert';
     } else if (message.message_from === 'system') {
         messageClass += ' message-system';
-        
-        // 如果是llm_request类型的系统消息，添加右对齐样式
         if (message.message_type === 'llm_request') {
             messageClass += ' message-llm-request';
+        }
+    } else if (message.message_category === 'engineer_chat') {
+        // 工程师对话消息
+        if (message.sender_type === 'user') {
+            messageClass += ' message-engineer-question';
+        } else if (message.sender_type === 'ai') {
+            messageClass += ' message-ai-assistant';
         }
     } else {
         messageClass += ' message-user';
     }
-    
+    if (message.pending) {
+        messageClass += ' message-pending';
+    }
     messageElement.className = messageClass;
     
-    // 构建消息内容
-    let messageContent = '';
+    // 为思考指示器设置特殊的data属性
+    if (message.message_type === 'thinking') {
+        messageElement.setAttribute('data-message-type', 'thinking');
+    }
     
-    // 消息头部
+    let messageContent = '';
     messageContent += `
         <div class="message-header">
-            <span class="message-sender">${getRoleName(message.message_from)}</span>
+            <span class="message-sender">${getSenderName(message)}</span>
             <div class="message-time-container">
                 <span class="message-source-btn" onclick="showMessageSourceModal('${message.message_id}')">
                     <i class="fas fa-code" title="查看源码"></i>
@@ -867,96 +927,49 @@ function addMessage(message) {
             </div>
         </div>
     `;
-    
-    // 消息内容
     messageContent += '<div class="message-content">';
+
+    // 防御性检查消息类型
+    if (!message.message_type) {
+        console.warn('[addMessage] 消息缺少message_type字段，设置默认值');
+        message.message_type = 'chat'; // 默认类型
+    }
     
-    // 处理llm_request类型的消息
-    if (message.message_type === 'llm_request') {
-        // 显示llm_request消息内容
+    // 处理消息内容逻辑
+    if (message.message_type === 'llm_request' || (message.message_type && message.message_type.includes('_llm_request'))) {
         let requestContent = '';
-        
-        // 确定数据来源（新格式或旧格式）
-        if (typeof message.message_content === 'object') {
-            if (message.message_content.type === 'llm_request' && message.message_content.data) {
-                // 新的标准化消息格式
-                requestContent = message.message_content.data;
-            } else if (message.message_content.data) {
-                // 直接使用data字段
-                requestContent = message.message_content.data;
+        let data = extractMessageData(message.message_content);
+        if (typeof data === 'object' && data !== null) {
+            if (typeof data.text === 'string') {
+                requestContent = data.text;
             } else {
-                // 回退到整个对象的字符串表示
-                requestContent = JSON.stringify(message.message_content);
+                requestContent = JSON.stringify(data);
             }
         } else {
-            // 如果是字符串，直接使用
-            requestContent = message.message_content;
+            requestContent = data;
         }
-        
-        messageContent += `
-            <div class="llm-request-notification">
-                <p>${requestContent}</p>
-            </div>
-        `;
-    } else if (message.message_type === 'llm_response') {
+        messageContent += `<div class="llm-request-notification"><p>${requestContent}</p></div>`;
+    } else if (message.message_type === 'llm_response' || (message.message_type && message.message_type.includes('_llm_response'))) {
         const content = message.message_content;
-        let data = null;
-        
-        // 确定数据来源（新格式或旧格式）
-        if (content.type === 'llm_response') {
-            // 新的标准化消息格式
-            data = content.data;
-        } else {
-            // 旧的消息格式
-            data = content;
-        }
-        
-        // 根据角色和消息类型处理不同的展示方式
+        let data = extractMessageData(content);
         if (message.message_from === '_captain') {
-            // 安全指挥官 - 任务分配
             if (data.response_type === 'TASK') {
                 messageContent += `<p>${data.response_text || '分配任务'}</p>`;
-                
                 if (data.tasks && data.tasks.length > 0) {
                     messageContent += '<div class="task-list">';
                     data.tasks.forEach(task => {
                         const taskType = getTaskTypeText(task.task_type);
                         let assignee_name = '未指定';
                         let assignee_role = '';
-                        
-                        // 根据任务分配的角色确定名称和角色类型
-                        if (task.task_assignee === '_manager') {
-                            assignee_name = '安全管理员';
-                            assignee_role = 'manager';
-                        } else if (task.task_assignee === '_operator') {
-                            assignee_name = '安全工程师';
-                            assignee_role = 'operator';
-                        } else if (task.task_assignee === '_executor') {
-                            assignee_name = '执行器';
-                            assignee_role = 'executor';
-                        } else if (task.task_assignee === '_expert') {
-                            assignee_name = '安全专家';
-                            assignee_role = 'expert';
-                        } else if (task.task_assignee === '_coordinator') {
-                            assignee_name = '协调员';
-                            assignee_role = 'coordinator';
-                        } else if (task.task_assignee === '_analyst') {
-                            assignee_name = '分析员';
-                            assignee_role = 'analyst';
-                        } else if (task.task_assignee === '_responder') {
-                            assignee_name = '处置员';
-                            assignee_role = 'responder';
-                        }
-                        
-                        // 显示任务ID（截取前6位以简化显示）
+                        if (task.task_assignee === '_manager') { assignee_name = '安全管理员'; assignee_role = 'manager'; }
+                        else if (task.task_assignee === '_operator') { assignee_name = '安全工程师'; assignee_role = 'operator'; }
+                        else if (task.task_assignee === '_executor') { assignee_name = '执行器'; assignee_role = 'executor'; }
+                        else if (task.task_assignee === '_expert') { assignee_name = '安全专家'; assignee_role = 'expert'; }
+                        else if (task.task_assignee === '_coordinator') { assignee_name = '协调员'; assignee_role = 'coordinator'; }
+                        else if (task.task_assignee === '_analyst') { assignee_name = '分析员'; assignee_role = 'analyst'; }
+                        else if (task.task_assignee === '_responder') { assignee_name = '处置员'; assignee_role = 'responder'; }
                         const shortTaskId = task.task_id ? String(task.task_id).substring(0, 8) : '';
-                        
-                        messageContent += `<div class="task-item task-type-${task.task_type}">
-                            <span class="task-assignee role-${assignee_role}">@${assignee_name}</span>
-                            <span class="task-name">${task.task_name}</span>
-                            <span class="task-type">${taskType}</span>
-                            <span class="task-id">${shortTaskId}</span>
-                        </div>`;
+                        messageContent += `<div class="task-item task-type-${task.task_type}"><span class="task-assignee role-${assignee_role}">@${assignee_name}</span> <span class="task-name">${task.task_name}</span> <span class="task-type">${taskType}</span> <span class="task-id">${shortTaskId}</span></div>`;
                     });
                     messageContent += '</div>';
                 }
@@ -964,87 +977,65 @@ function addMessage(message) {
                 messageContent += `<p>${data.response_text || JSON.stringify(data)}</p>`;
             }
         } else if (message.message_from === '_manager') {
-            // 安全管理员 - 动作分配
             if (data.response_type === 'ACTION') {
                 messageContent += `<p>${data.response_text || '安排动作'}</p>`;
-                
                 if (data.actions && data.actions.length > 0) {
                     messageContent += '<div class="action-list">';
                     data.actions.forEach(action => {
                         const actionType = action.action_type || 'default';
                         let assignee_name = '未指定';
                         let assignee_role = '';
-                        
-                        // 根据动作分配的角色确定名称和角色类型
-                        if (action.action_assignee === '_manager') {
-                            assignee_name = '安全管理员';
-                            assignee_role = 'manager';
-                        } else if (action.action_assignee === '_operator') {
-                            assignee_name = '安全工程师';
-                            assignee_role = 'operator';
-                        } else if (action.action_assignee === '_executor') {
-                            assignee_name = '执行器';
-                            assignee_role = 'executor';
-                        } else if (action.action_assignee === '_expert') {
-                            assignee_name = '安全专家';
-                            assignee_role = 'expert';
-                        }
-                        
-                        // 显示任务ID和动作ID（截取前6位以简化显示）
+                        if (action.action_assignee === '_manager') { assignee_name = '安全管理员'; assignee_role = 'manager'; }
+                        else if (action.action_assignee === '_operator') { assignee_name = '安全工程师'; assignee_role = 'operator'; }
+                        else if (action.action_assignee === '_executor') { assignee_name = '执行器'; assignee_role = 'executor'; }
+                        else if (action.action_assignee === '_expert') { assignee_name = '安全专家'; assignee_role = 'expert'; }
+                        else if (action.action_assignee === '_analyst') { assignee_name = '分析员'; assignee_role = 'analyst'; }
+                        else if (action.action_assignee === '_responder') { assignee_name = '处置员'; assignee_role = 'responder'; }
+                        else if (action.action_assignee === '_coordinator') { assignee_name = '协调员'; assignee_role = 'coordinator'; }
                         const shortTaskId = action.task_id ? String(action.task_id).substring(0, 8) : '';
                         const shortActionId = action.action_id ? String(action.action_id).substring(0, 8) : '';
                         const idInfo = `${shortTaskId}->${shortActionId}`;
-                        
-                        messageContent += `<div class="action-item action-type-${actionType}">
-                            <span class="action-assignee role-${assignee_role}">@${assignee_name}</span>
-                            <span class="action-name">${action.action_name}</span>
-                            <span class="action-id">${idInfo}</span>
-                        </div>`;
+                        messageContent += `<div class="action-item action-type-${actionType}"><span class="action-assignee role-${assignee_role}">@${assignee_name}</span> <span class="action-name">${action.action_name}</span> <span class="action-id">${idInfo}</span></div>`;
                     });
                     messageContent += '</div>';
                 }
             } else {
                 messageContent += `<p>${data.response_text || JSON.stringify(data)}</p>`;
             }
-        } else {
-            // 其他角色的llm_response消息
+        } else { // Other roles llm_response
             if (data.response_type === 'TASK') {
                 messageContent += `<p>${data.response_text || '分配任务'}</p>`;
-                
                 if (data.tasks && data.tasks.length > 0) {
                     messageContent += '<pre>';
-                    data.tasks.forEach(task => {
-                        messageContent += `- ${task.task_name} (${getTaskTypeText(task.task_type)})\n`;
-                    });
+                    data.tasks.forEach(task => { messageContent += `- ${task.task_name} (${getTaskTypeText(task.task_type)})\n`; });
                     messageContent += '</pre>';
                 }
             } else if (data.response_type === 'ACTION') {
                 messageContent += `<p>${data.response_text || '安排动作'}</p>`;
-                
                 if (data.actions && data.actions.length > 0) {
                     messageContent += '<pre>';
-                    data.actions.forEach(action => {
-                        messageContent += `- ${action.action_name} (任务: ${action.task_id})\n`;
-                    });
+                    data.actions.forEach(action => { messageContent += `- ${action.action_name} (任务: ${action.task_id})\n`; });
                     messageContent += '</pre>';
                 }
             } else if (data.response_type === 'COMMAND') {
                 messageContent += `<p>${data.response_text || '准备命令'}</p>`;
-                
                 if (data.commands && data.commands.length > 0) {
                     messageContent += '<div class="command-list">';
                     data.commands.forEach(command => {
-                        // 显示任务ID、动作ID和命令ID（截取前6位以简化显示）
                         const shortTaskId = command.task_id ? String(command.task_id).substring(0, 8) : '';
                         const shortActionId = command.action_id ? String(command.action_id).substring(0, 8) : '';
                         const shortCommandId = command.command_id ? String(command.command_id).substring(0, 8) : '';
                         const idInfo = `${shortTaskId}->${shortActionId}->${shortCommandId}`;
-                        
-                        messageContent += `<div class="command-item command-type-${command.command_type || 'default'}">
-                            <span class="command-name">${command.command_name}</span>
-                            <span class="command-type">${command.command_type || ''}</span>
-                            <span class="command-id">${idInfo}</span>
-                        </div>`;
+                        let assignee_name = '未指定';
+                        let assignee_role = '';
+                        if (command.command_assignee === '_manager') { assignee_name = '安全管理员'; assignee_role = 'manager'; }
+                        else if (command.command_assignee === '_operator') { assignee_name = '安全工程师'; assignee_role = 'operator'; }
+                        else if (command.command_assignee === '_executor') { assignee_name = '执行器'; assignee_role = 'executor'; }
+                        else if (command.command_assignee === '_expert') { assignee_name = '安全专家'; assignee_role = 'expert'; }
+                        else if (command.command_assignee === '_analyst') { assignee_name = '分析员'; assignee_role = 'analyst'; }
+                        else if (command.command_assignee === '_responder') { assignee_name = '处置员'; assignee_role = 'responder'; }
+                        else if (command.command_assignee === '_coordinator') { assignee_name = '协调员'; assignee_role = 'coordinator'; }
+                        messageContent += `<div class="command-item command-type-${command.command_type || 'default'}"><span class="command-assignee role-${assignee_role}">@${assignee_name}</span> <span class="command-name">${command.command_name}</span> <span class="command-type">${command.command_type || ''}</span> <span class="command-id">${idInfo}</span></div>`;
                     });
                     messageContent += '</div>';
                 }
@@ -1053,135 +1044,83 @@ function addMessage(message) {
             }
         }
     } else if (message.message_type === 'command_result') {
-        // 命令执行结果
         const content = message.message_content;
-        let data = null;
-        
-        // 确定数据来源（新格式或旧格式）
-        if (content.type === 'command_result') {
-            // 新的标准化消息格式
-            data = content.data;
-        } else {
-            // 旧的消息格式
-            data = content;
-        }
-        
+        let data = extractMessageData(content);
         if (message.message_from === '_executor') {
-            // 执行器 - 可折叠的JSON结果
             messageContent += `<p>命令 "${data.command_name}" 执行${data.status === 'completed' ? '成功' : '失败'}</p>`;
-            
-            // 如果有AI摘要，使用markdown渲染
             if (data.ai_summary) {
-                messageContent += `
-                    <div class="ai-summary markdown-content">
-                        ${marked.parse(data.ai_summary)}
-                    </div>
-                `;
+                messageContent += `<div class="ai-summary markdown-content">${marked.parse(data.ai_summary)}</div>`;
             }
-            
-            // 可折叠的JSON结果
             if (data.result) {
                 const resultId = `result-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-                messageContent += `
-                    <div class="collapsible-result">
-                        <div class="collapsible-header" onclick="toggleCollapsible('${resultId}')">
-                            <span class="collapse-icon">▶</span> 查看详细结果
-                        </div>
-                        <div id="${resultId}" class="collapsible-content collapsed">
-                            <pre>${JSON.stringify(data.result, null, 2)}</pre>
-                        </div>
-                    </div>
-                `;
+                messageContent += `<div class="collapsible-result"><div class="collapsible-header" onclick="toggleCollapsible('${resultId}')"><span class="collapse-icon">▶</span> 查看详细结果</div><div id="${resultId}" class="collapsible-content collapsed"><pre>${JSON.stringify(data.result, null, 2)}</pre></div></div>`;
             }
         } else {
-            // 其他角色的命令结果消息
             messageContent += `<p>命令 "${data.command_name}" 执行${data.status === 'completed' ? '成功' : '失败'}</p>`;
-            
             if (data.result) {
                 messageContent += `<pre>${JSON.stringify(data.result, null, 2)}</pre>`;
             }
         }
-    } else if (message.message_type === 'execution_summary') {
-        // 执行结果摘要
+    } else if (message.message_type === 'execution_summary' || message.message_type === 'execution_summary_generated') {
         const content = message.message_content;
-        let data = null;
-        
-        // 确定数据来源（新格式或旧格式）
-        if (content.type === 'execution_summary') {
-            // 新的标准化消息格式
-            data = content.data;
-        } else {
-            // 旧的消息格式
-            data = content;
-        }
-        
+        let data = extractMessageData(content);
         if (message.message_from === '_expert' && data.ai_summary) {
-            // 执行器的摘要 - 使用markdown渲染
-            messageContent += `
-                <p>执行结果摘要:</p>
-                <div class="ai-summary markdown-content">
-                    ${marked.parse(data.ai_summary)}
-                </div>
-            `;
+            messageContent += `<p>执行结果摘要:</p><div class="ai-summary markdown-content">${marked.parse(data.ai_summary)}</div>`;
         } else {
-            // 其他角色的摘要
             messageContent += `<p>执行结果摘要:</p><p>${data.ai_summary}</p>`;
         }
-    } else if (message.message_type === 'event_summary') {
-        // 事件总结
+    } else if (message.message_type === 'event_summary' || message.message_type === 'event_summary_generated') {
         const content = message.message_content;
-        let data = null;
-        
-        // 确定数据来源（新格式或旧格式）
-        if (content.type === 'event_summary') {
-            // 新的标准化消息格式
-            data = content.data;
-        } else {
-            // 旧的消息格式
-            data = content;
-        }
-        
+        let data = extractMessageData(content);
         if (message.message_from === '_expert') {
-            // 安全专家的总结 - 使用markdown渲染并默认展开
-            messageContent += `
-                <p>事件总结 (轮次 ${data.round_id}):</p>
-                <div class="event-summary markdown-content">
-                    ${marked.parse(data.event_summary)}
-                </div>
-            `;
+            messageContent += `<p>事件总结 (轮次 ${data.round_id}):</p><div class="event-summary markdown-content">${marked.parse(data.event_summary)}</div>`;
         } else {
-            // 其他角色的总结
             messageContent += `<p>事件总结 (轮次 ${data.round_id}):</p><p>${data.event_summary}</p>`;
         }
     } else if (message.message_type === 'system_notification') {
-        // 系统通知消息
         const content = message.message_content;
-        let data = null;
+        let data = extractMessageData(content);
+        messageContent += `<div class="system-notification"><p>${data.response_text}</p></div>`;
+    } else if (message.message_category === 'engineer_chat') {
+        // 处理工程师对话消息
+        const content = message.message_content;
+        let data = extractMessageData(content);
+        let chatContent = '';
         
-        // 确定数据来源（新格式或旧格式）
-        if (content.type === 'system_notification') {
-            // 新的标准化消息格式
-            data = content.data;
+        if (typeof data === 'object' && data !== null) {
+            chatContent = data.content || data.text || JSON.stringify(data);
         } else {
-            // 旧的消息格式
-            data = content;
+            chatContent = data || '';
         }
         
-        // 显示系统通知
-        messageContent += `
-            <div class="system-notification">
-                <p>${data.response_text}</p>
-            </div>
-        `;
+        if (message.sender_type === 'user') {
+            messageContent += `<div class="engineer-question"><p>${chatContent}</p></div>`;
+        } else if (message.sender_type === 'ai') {
+            // AI助手回复支持Markdown渲染
+            messageContent += `<div class="ai-response markdown-content">${marked.parse(chatContent)}</div>`;
+        }
     } else {
-        // 普通消息
-        messageContent += `<p>${message.message_content}</p>`;
+        // 普通消息，确保 message.message_content 不是对象。如果是对象，尝试提取 data.text 或 stringify
+        let plainTextContent = message.message_content;
+        if (typeof plainTextContent === 'object' && plainTextContent !== null) {
+            if (plainTextContent.data && typeof plainTextContent.data.text === 'string') {
+                plainTextContent = plainTextContent.data.text;
+            } else if (typeof plainTextContent.text === 'string') {
+                 plainTextContent = plainTextContent.text;
+            } else {
+                plainTextContent = JSON.stringify(plainTextContent);
+            }
+        }
+        messageContent += `<p>${plainTextContent}</p>`;
     }
-    
+    // End of placeholder for detailed message content rendering logic
+
     messageContent += '</div>';
-    
     messageElement.innerHTML = messageContent;
+    messageElement.id = `msg-${message.temp_id || message.message_id || message.id}`;
     elements.chatMessages.appendChild(messageElement);
+
+    return true; // 表示消息已成功添加并渲染
 }
 
 // 添加折叠/展开功能
@@ -1201,68 +1140,263 @@ function toggleCollapsible(id) {
 
 // 发送消息
 async function sendMessage() {
-    const messageInput = document.getElementById('user-message');
-    const message = messageInput.value.trim();
+    // 使用统一的输入框，预留扩展空间
+    const messageInput = elements.userInput;
+    const text = messageInput.value.trim();
+
+    if (!text) return;
+
+    // 检查是否是AI助手对话模式（以@AI开头的消息）
+    if (text.startsWith('@AI') || text.startsWith('@ai')) {
+        await sendEngineerChatMessage(text.replace(/^@AI\s*|^@ai\s*/i, '').trim());
+        return;
+    }
     
-    if (!message) return;
+    // 检查是否是普通@消息（未来可扩展给其他用户或Agent）
+    if (text.startsWith('@') && !text.startsWith('@AI') && !text.startsWith('@ai')) {
+        showToast('请使用 @AI 来与AI助手对话，或输入普通消息', 'info');
+        return;
+    }
+
+    if (!socket.connected) {
+        showToast('WebSocket未连接，无法发送消息', 'error');
+        return;
+    }
+
+    // 生成临时ID用于本地展示和与服务器回应匹配
+    const tempId = `tmp_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+
+    // 构造待显示的本地消息对象
+    const pendingMessage = {
+        temp_id: tempId,
+        message_id: tempId,
+        event_id: eventId,
+        message_from: 'user',
+        message_type: 'user_message',
+        message_content: { type: 'text', text: text },
+        created_at: new Date().toISOString(),
+        pending: true,
+        user_nickname: (() => {
+            try {
+                const info = JSON.parse(localStorage.getItem('user_info') || '{}');
+                return info.nickname || info.username || '用户';
+            } catch (e) {
+                return '用户';
+            }
+        })()
+    };
+
+    // 在界面上立即显示待确认的消息
+    addMessage(pendingMessage);
+    scrollToBottom();
+
+    // 通过WebSocket发送到服务器
+    socket.emit('message', {
+        event_id: eventId,
+        message: pendingMessage.message_content,
+        sender: 'user',
+        temp_id: tempId
+    });
+
+    // 清空输入框并重新聚焦
+    messageInput.value = '';
+    messageInput.focus();
+}
+
+// 工程师对话相关函数
+async function sendEngineerChatMessage(message) {
+    if (!message.trim()) return;
+
+    // 显示发送中状态
+    const sendButton = elements.sendButton;
+    const originalText = sendButton.querySelector('.cyber-btn-text').textContent;
+    
+    // 立即清空输入框和恢复按钮（优化用户体验）
+    elements.userInput.value = '';
     
     try {
-        // 禁用发送按钮
-        const sendButton = document.getElementById('send-message-btn');
+        sendButton.querySelector('.cyber-btn-text').textContent = '发送中...';
         sendButton.disabled = true;
-        
-        const response = await fetch(`/api/event/send_message/${eventId}`, {
+
+        const response = await fetch('/api/engineer-chat/send', {
             method: 'POST',
             headers: getAuthHeaders(),
             body: JSON.stringify({
-                message: message,
-                sender: 'user'
-            }),
-            credentials: 'include'
+                event_id: eventId,
+                message: message
+            })
         });
-        
-        if (response.status === 401) {
-            showToast('登录已过期，请重新登录', 'error');
-            setTimeout(() => {
-                window.location.href = '/login';
-            }, 1500);
-            return;
-        }
-        
+
         const data = await response.json();
-        
-        if (data.status === 'success') {
-            // 清空输入框
-            messageInput.value = '';
-            messageInput.focus();
+
+        if (response.ok && data.status === 'success') {
+            // 立即显示用户消息（不等待WebSocket广播）
+            if (data.data && data.data.user_message) {
+                addMessage(data.data.user_message);
+                scrollToBottom();
+            }
+            
+            // 立即恢复按钮状态 - 异步模式下不等待AI回复
+            sendButton.querySelector('.cyber-btn-text').textContent = originalText;
+            sendButton.disabled = false;
+            elements.userInput.focus();
+            
+            // 显示AI正在思考的状态指示器
+            if (data.data && data.data.ai_processing) {
+                showAIThinkingIndicator();
+            }
+            
+            // 如果概要有更新，提示用户
+            if (data.data && data.data.summary_updated) {
+                showToast('事件概要已更新', 'info');
+            }
+            
+            console.log('%c[工程师对话] 用户消息已显示，AI正在后台处理', 'color: #4CAF50;');
+            return; // 立即返回，不在finally块中重复处理
+            
+        } else if (data.status === 'warning') {
+            // 达到轮次限制
+            showToast(data.message, 'warning');
+            
+            // 可以在这里添加创建新会话的逻辑
+            if (confirm('是否创建新的对话会话？')) {
+                await createNewChatSession();
+            }
+            
         } else {
-            showToast('发送失败: ' + (data.message || '未知错误'), 'error');
+            showToast(data.message || '发送失败', 'error');
         }
+
     } catch (error) {
-        console.error('发送消息错误:', error);
-        showToast('网络错误，请稍后重试', 'error');
+        console.error('发送工程师对话消息失败:', error);
+        showToast('发送失败: ' + error.message, 'error');
     } finally {
-        // 启用发送按钮
-        const sendButton = document.getElementById('send-message-btn');
+        // 恢复按钮状态（仅在出错时执行）
+        sendButton.querySelector('.cyber-btn-text').textContent = originalText;
         sendButton.disabled = false;
+        elements.userInput.focus();
+    }
+}
+
+// 创建新的工程师对话会话
+async function createNewChatSession() {
+    try {
+        const response = await fetch('/api/engineer-chat/new-session', {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({
+                event_id: eventId
+            })
+        });
+
+        const data = await response.json();
+
+        if (response.ok && data.status === 'success') {
+            showToast('新对话会话已创建', 'success');
+            return data.data.new_session_id;
+        } else {
+            showToast(data.message || '创建新会话失败', 'error');
+            return null;
+        }
+
+    } catch (error) {
+        console.error('创建新会话失败:', error);
+        showToast('创建新会话失败: ' + error.message, 'error');
+        return null;
+    }
+}
+
+// AI思考状态指示器相关函数
+let aiThinkingIndicatorId = null;
+
+function showAIThinkingIndicator() {
+    // 如果已经有思考指示器，不重复添加
+    if (aiThinkingIndicatorId) return;
+    
+    // 创建思考指示器消息
+    const thinkingMessage = {
+        id: `ai_thinking_${Date.now()}`,
+        message_id: `ai_thinking_${Date.now()}`,
+        event_id: eventId,
+        message_from: 'ai_assistant',
+        message_content: 'AI助手正在思考中...',
+        message_type: 'thinking',
+        message_category: 'engineer_chat',
+        sender_type: 'ai',
+        created_at: new Date().toISOString(),
+        temp_indicator: true // 标记为临时指示器
+    };
+    
+    // 添加到界面
+    if (addMessage(thinkingMessage)) {
+        aiThinkingIndicatorId = thinkingMessage.id;
+        console.log('%c[AI思考指示器] 显示思考状态', 'color: #FF9800;');
+        
+        // 滚动到底部
+        scrollToBottom();
+    }
+}
+
+function hideAIThinkingIndicator() {
+    if (aiThinkingIndicatorId) {
+        // 移除思考指示器元素
+        const indicatorElement = document.getElementById(`msg-${aiThinkingIndicatorId}`);
+        if (indicatorElement) {
+            indicatorElement.remove();
+            console.log('%c[AI思考指示器] 隐藏思考状态', 'color: #FF9800;');
+        }
+        
+        // 从数据结构中移除
+        const uniqueKey = `id_${aiThinkingIndicatorId}`;
+        displayedMessages.delete(uniqueKey);
+        const idx = messagesData.findIndex(m => m.id === aiThinkingIndicatorId);
+        if (idx !== -1) messagesData.splice(idx, 1);
+        
+        aiThinkingIndicatorId = null;
+    }
+}
+
+// 获取当前驾驶模式
+async function fetchDrivingMode() {
+    try {
+        const response = await fetch('/api/state/driving-mode', {
+            headers: getAuthHeaders()
+        });
+        if (response.ok) {
+            const data = await response.json();
+            isAutoMode = (data.data.mode === 'auto');
+            updateModeUI(false);
+        }
+    } catch (err) {
+        console.error('获取驾驶模式失败:', err);
+    }
+}
+
+function updateModeUI(showTip = true) {
+    if (isAutoMode) {
+        elements.modeSwitch.classList.remove('manual-mode');
+        elements.modeSwitch.classList.add('auto-mode');
+        elements.modeSwitch.querySelector('.switch-label').textContent = 'AI自动驾驶';
+        if (showTip) showToast('已切换到AI自动驾驶模式', 'info');
+    } else {
+        elements.modeSwitch.classList.remove('auto-mode');
+        elements.modeSwitch.classList.add('manual-mode');
+        elements.modeSwitch.querySelector('.switch-label').textContent = '人工操控';
+        if (showTip) showToast('已切换到人工操控模式', 'info');
     }
 }
 
 // 切换模式
 function toggleMode() {
     isAutoMode = !isAutoMode;
-    
-    if (isAutoMode) {
-        elements.modeSwitch.classList.remove('manual-mode');
-        elements.modeSwitch.classList.add('auto-mode');
-        elements.modeSwitch.querySelector('.switch-label').textContent = 'AI自动驾驶';
-        showToast('已切换到AI自动驾驶模式', 'info');
-    } else {
-        elements.modeSwitch.classList.remove('auto-mode');
-        elements.modeSwitch.classList.add('manual-mode');
-        elements.modeSwitch.querySelector('.switch-label').textContent = '人工操控';
-        showToast('已切换到人工操控模式', 'info');
-    }
+    updateModeUI();
+
+    const mode = isAutoMode ? 'auto' : 'manual';
+    fetch('/api/state/driving-mode', {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ mode })
+    }).catch(err => console.error('更新驾驶模式失败:', err));
 }
 
 // 显示事件详情模态框
@@ -1302,11 +1436,19 @@ function showEventDetailsModal() {
     
     console.log('%c[事件详情] 填充事件详情数据', 'color: #3F51B5;');
     
-    // 显示事件原始信息
-    messageDetailElement.textContent = eventData.message || '无原始信息';
-    
-    // 显示事件上下文
-    contextDetailElement.textContent = eventData.context || '无上下文信息';
+    // 显示事件原始信息，支持Markdown渲染
+    if (eventData.message) {
+        messageDetailElement.innerHTML = marked.parse(eventData.message);
+    } else {
+        messageDetailElement.innerHTML = '<p>无原始信息</p>';
+    }
+
+    // 显示事件上下文，支持Markdown渲染
+    if (eventData.context) {
+        contextDetailElement.innerHTML = marked.parse(eventData.context);
+    } else {
+        contextDetailElement.innerHTML = '<p>无上下文信息</p>';
+    }
     
     // 获取并显示事件总结
     fetchEventSummaries(summaryListElement);
@@ -1372,13 +1514,14 @@ function displayEventSummaries(summaries, container) {
     summaries.sort((a, b) => b.round_id - a.round_id);
     
     summaries.forEach(summary => {
+        const content = summary.event_summary ? marked.parse(summary.event_summary) : '';
         html += `
             <div class="event-summary-item">
                 <div class="event-summary-header">
                     <span class="event-summary-round">轮次 ${summary.round_id}</span>
                     <span class="event-summary-time">${formatDateTime(summary.created_at)}</span>
                 </div>
-                <div class="event-summary-content">${summary.event_summary}</div>
+                <div class="event-summary-content markdown-content">${content}</div>
             </div>
         `;
     });
@@ -1472,7 +1615,7 @@ function displayRoleHistory(messages, container) {
                 <p>命令执行结果:</p>
                 <pre><code>${JSON.stringify(resultData, null, 2)}</code></pre>
             `;
-        } else if (message.message_type === 'execution_summary') {
+        } else if (message.message_type === 'execution_summary' || message.message_type === 'execution_summary_generated') {
             // 执行结果摘要，尝试提取AI摘要并用markdown渲染
             const summaryData = typeof message.message_content === 'object' 
                 ? message.message_content 
@@ -1492,7 +1635,7 @@ function displayRoleHistory(messages, container) {
                 <p>执行结果摘要:</p>
                 <div class="role-history-markdown">${marked.parse(aiSummary)}</div>
             `;
-        } else if (message.message_type === 'event_summary') {
+        } else if (message.message_type === 'event_summary' || message.message_type === 'event_summary_generated') {
             // 事件总结，用markdown渲染
             const summaryData = typeof message.message_content === 'object' 
                 ? message.message_content 
@@ -1535,6 +1678,100 @@ function displayRoleHistory(messages, container) {
     container.innerHTML = html;
 }
 
+// 显示事件关系树模态框
+function showEventTreeModal() {
+    fetchEventTree();
+    elements.eventTreeModal.style.display = 'flex';
+}
+
+// 获取事件关系树数据
+async function fetchEventTree() {
+    try {
+        const response = await fetch(`${API_BASE_URL}/event/${eventId}/hierarchy`, {
+            headers: getAuthHeaders(),
+            credentials: 'include'
+        });
+
+        if (response.status === 401) return;
+
+        const data = await response.json();
+
+        if (data.status === 'success') {
+            displayEventTree(data.data);
+        } else {
+            elements.eventTreeContainer.innerHTML = '<div class="text-center">获取失败</div>';
+        }
+    } catch (error) {
+        console.error('获取事件关系树出错:', error);
+        elements.eventTreeContainer.innerHTML = '<div class="text-center">获取关系树失败</div>';
+    }
+}
+
+function displayEventTree(rounds) {
+    if (!rounds || rounds.length === 0) {
+        elements.eventTreeContainer.innerHTML = '<div class="text-center">暂无数据</div>';
+        return;
+    }
+
+    let html = '';
+    rounds.forEach(round => {
+        html += `<div class="event-tree-round">`;
+        html += `<div class="event-tree-round-title"># round ${round.round_id}</div>`;
+        html += buildTaskList(round.tasks);
+        html += `</div>`;
+    });
+
+    elements.eventTreeContainer.innerHTML = html;
+}
+
+function buildTaskList(tasks) {
+    let html = '<ul>';
+    tasks.forEach(task => {
+        html += `<li>${task.task_name || task.task_id}<span class="event-tree-status">[${getStatusText(task.task_status)}]</span>`;
+        if (task.actions && task.actions.length > 0) {
+            html += buildActionList(task.actions);
+        }
+        html += '</li>';
+    });
+    html += '</ul>';
+    return html;
+}
+
+function buildActionList(actions) {
+    let html = '<ul>';
+    actions.forEach(action => {
+        html += `<li>${action.action_name || action.action_id}<span class="event-tree-status">[${getStatusText(action.action_status)}]</span>`;
+        if (action.commands && action.commands.length > 0) {
+            html += buildCommandList(action.commands);
+        }
+        html += '</li>';
+    });
+    html += '</ul>';
+    return html;
+}
+
+function buildCommandList(commands) {
+    let html = '<ul>';
+    commands.forEach(cmd => {
+        html += `<li>${cmd.command_name || cmd.command_id}<span class="event-tree-status">[${getStatusText(cmd.command_status)}]</span>`;
+        if (cmd.executions && cmd.executions.length > 0) {
+            html += buildExecutionList(cmd.executions);
+        }
+        html += '</li>';
+    });
+    html += '</ul>';
+    return html;
+}
+
+function buildExecutionList(executions) {
+    let html = '<ul>';
+    executions.forEach(exe => {
+        html += `<li>${exe.execution_id}<span class="event-tree-status">[${getStatusText(exe.execution_status)}]</span></li>`;
+    });
+    html += '</ul>';
+    return html;
+}
+
 // 关闭所有模态框
 function closeAllModals() {
     document.querySelectorAll('.cyber-modal').forEach(modal => {
@@ -1559,9 +1796,12 @@ function showMessageSourceModal(messageId) {
         return;
     }
     
+    // 记录当前查看的消息ID
+    currentSourceMessageId = messageId;
+
     // 格式化JSON
     const formattedJson = JSON.stringify(message, null, 2);
-    
+
     // 使用markdown渲染
     elements.messageSourceContent.innerHTML = marked.parse('```json\n' + formattedJson + '\n```');
     
@@ -1569,9 +1809,23 @@ function showMessageSourceModal(messageId) {
     elements.messageSourceModal.style.display = 'flex';
 }
 
-// 将函数暴露到全局作用域
-window.showMessageSourceModal = showMessageSourceModal;
-
+// 复制消息源码到剪贴板
+function copyMessageSource() {
+    if (!currentSourceMessageId) return;
+    const message = messagesMap.get(currentSourceMessageId);
+    if (!message) {
+        showToast('无法找到消息数据', 'error');
+        return;
+    }
+    const text = JSON.stringify(message, null, 2);
+    navigator.clipboard.writeText(text)
+        .then(() => {
+            showToast('已复制到剪贴板', 'success');
+        })
+        .catch(() => {
+            showToast('复制失败', 'error');
+        });
+}
 // 滚动到底部
 function scrollToBottom() {
     // 使用requestAnimationFrame确保DOM更新后再滚动
@@ -1634,6 +1888,56 @@ function getRoleName(role) {
     return roleMap[role] || role;
 }
 
+function getSenderName(message) {
+    // 处理工程师对话消息
+    if (message.message_category === 'engineer_chat') {
+        if (message.sender_type === 'user') {
+            if (message.user_nickname) {
+                return message.user_nickname;
+            }
+            try {
+                const info = JSON.parse(localStorage.getItem('user_info') || '{}');
+                return info.nickname || info.username || '工程师';
+            } catch (e) {
+                return '工程师';
+            }
+        } else if (message.sender_type === 'ai') {
+            return 'AI助手';
+        }
+    }
+    
+    if (message.message_from === 'user') {
+        // 优先使用消息中的user_nickname字段
+        if (message.user_nickname) {
+            return message.user_nickname;
+        }
+        
+        // 如果消息中有user_username，使用它
+        if (message.user_username) {
+            return message.user_username;
+        }
+        
+        // 如果消息中没有用户信息，尝试从localStorage获取
+        try {
+            const info = JSON.parse(localStorage.getItem('user_info') || '{}');
+            // 检查当前登录用户的ID是否与消息的user_id匹配
+            if (message.user_id && info.user_id && message.user_id === info.user_id) {
+                // 如果是当前用户的消息，使用localStorage中的信息
+                return info.nickname || info.username || '用户';
+            } else if (message.user_id && info.user_id && message.user_id !== info.user_id) {
+                // 如果是其他用户的消息，但没有用户信息，显示为"其他用户"
+                return '其他用户';
+            } else {
+                // 无法确定用户身份时的默认显示
+                return info.nickname || info.username || '用户';
+            }
+        } catch (e) {
+            return '用户';
+        }
+    }
+    return getRoleName(message.message_from);
+}
+
 function getTaskTypeText(type) {
     const typeMap = {
         'analysis': '分析',
@@ -1648,15 +1952,15 @@ function getTaskTypeText(type) {
 
 function getStatusText(status) {
     const statusMap = {
-        'pending': '待处理',
-        'processing': '处理中',
-        'completed': '已完成',
-        'failed': '失败',
-        'round_finished': '轮次完成',
-        'summarized': '已总结',
-        'resolved': '已解决'
+        'pending': '⏳ 待处理',
+        'processing': '🔄 处理中',
+        'completed': '✅ 已完成',
+        'failed': '❌ 失败',
+        'round_finished': '🎯 轮次完成',
+        'summarized': '📄 已总结',
+        'resolved': '✔️ 已解决'
     };
-    
+
     return statusMap[status] || status;
 }
 
@@ -1670,16 +1974,40 @@ function getSeverityText(severity) {
     return severityMap[severity] || severity || '未知';
 }
 
+function extractMessageData(content) {
+    if (!content) {
+        return content;
+    }
+    if (typeof content === 'string') {
+        try {
+            const parsed = JSON.parse(content);
+            if (parsed && typeof parsed === 'object') {
+                return (parsed.data !== undefined) ? parsed.data : parsed;
+            }
+        } catch (e) {
+            return content;
+        }
+    } else if (typeof content === 'object') {
+        return (content.data !== undefined) ? content.data : content;
+    }
+    return content;
+}
+
 function getMessageTypeText(type) {
     const typeMap = {
+        'llm_request': 'AI请求',
         'llm_response': 'AI响应',
         'command_result': '命令结果',
         'execution_summary': '执行摘要',
+        'execution_summary_generated': '执行摘要',
         'event_summary': '事件总结',
+        'event_summary_generated': '事件总结',
         'user_message': '用户消息',
         'system_notification': '系统通知'
     };
-    
+
+    if (type && type.includes('_llm_request')) return 'AI请求';
+    if (type && type.includes('_llm_response')) return 'AI响应';
     return typeMap[type] || type;
 }
 
@@ -2121,4 +2449,5 @@ function showExecutionNotification(execution) {
 
 // 将函数暴露到全局作用域
 window.showMessageSourceModal = showMessageSourceModal;
-window.toggleExecutionContext = toggleExecutionContext; 
+window.copyMessageSource = copyMessageSource;
+window.toggleExecutionContext = toggleExecutionContext;

@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>用户管理 - DeepSOC</title>
+    <link rel="stylesheet" href="/static/css/bootstrap.min.css">
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-4">
+        <div class="container">
+            <a class="navbar-brand d-flex align-items-center" href="/">
+                <img src="/static/images/logo/logo.png" alt="DeepSOC Logo" height="30" class="me-2">
+                DeepSOC
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                    <li class="nav-item"><a class="nav-link" href="/">首页</a></li>
+                    <li class="nav-item d-none" id="user-management-nav-item"><a class="nav-link active" href="/user-management">用户管理</a></li>
+                    <li class="nav-item dropdown" id="settings-nav-item">
+                        <a class="nav-link dropdown-toggle" href="#" id="settings-dropdown" role="button" data-bs-toggle="dropdown">设置</a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="/settings/prompts">提示词管理</a></li>
+                            <li><a class="dropdown-item" href="/settings/background-security">安全背景</a></li>
+                            <li><a class="dropdown-item" href="/settings/soar-playbooks">SOAR剧本</a></li>
+                            <li><a class="dropdown-item" href="/settings/mcp-tools">MCP Tools</a></li>
+                        </ul>
+                    </li>
+                </ul>
+                <ul class="navbar-nav">
+                    <li class="nav-item" id="login-nav-item"><a class="nav-link" href="/login">登录</a></li>
+                    <li class="nav-item dropdown d-none" id="user-nav-item">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown"><span id="user-info">用户</span></a>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li><a class="dropdown-item" href="/change-password">修改密码</a></li>
+                            <li><a class="dropdown-item" href="#" id="logout-btn">退出登录</a></li>
+                        </ul>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="d-flex justify-content-between mb-3">
+            <h3>用户管理</h3>
+            <button class="btn btn-primary" id="create-user-btn">创建用户</button>
+        </div>
+        <table class="table table-bordered" id="user-table">
+            <thead>
+                <tr>
+                    <th>ID</th><th>用户名</th><th>昵称</th><th>邮箱</th><th>手机号</th><th>角色</th><th>状态</th><th>操作</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+
+    <div class="modal fade" id="user-modal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">用户信息</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="user-id">
+                    <div class="row mb-3 align-items-center">
+                        <label class="col-sm-3 col-form-label">用户名</label>
+                        <div class="col-sm-9">
+                            <input type="text" class="form-control" id="user-username" required>
+                        </div>
+                    </div>
+                    <div class="row mb-3 align-items-center">
+                        <label class="col-sm-3 col-form-label">昵称</label>
+                        <div class="col-sm-9">
+                            <input type="text" class="form-control" id="user-nickname">
+                        </div>
+                    </div>
+                    <div class="row mb-3 align-items-center">
+                        <label class="col-sm-3 col-form-label">邮箱</label>
+                        <div class="col-sm-9">
+                            <input type="email" class="form-control" id="user-email" required>
+                        </div>
+                    </div>
+                    <div class="row mb-3 align-items-center">
+                        <label class="col-sm-3 col-form-label">手机号</label>
+                        <div class="col-sm-9">
+                            <input type="text" class="form-control" id="user-phone">
+                        </div>
+                    </div>
+                    <div class="row mb-3 align-items-center">
+                        <label class="col-sm-3 col-form-label">角色</label>
+                        <div class="col-sm-9">
+                            <select class="form-select" id="user-role">
+                                <option value="user">用户</option>
+                                <option value="admin">管理员</option>
+                                <option value="auditor">审计员</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row mb-3 align-items-center">
+                        <label class="col-sm-3 col-form-label">密码 <small class="text-muted">(创建时必填)</small></label>
+                        <div class="col-sm-9">
+                            <input type="password" class="form-control" id="user-password">
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                    <button type="button" class="btn btn-primary" id="save-user-btn">保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast-container" class="toast-container position-fixed bottom-0 end-0 p-3"></div>
+
+    <script src="/static/js/bootstrap.bundle.min.js"></script>
+    <script src="/static/js/user_management.js"></script>
+</body>
+</html>

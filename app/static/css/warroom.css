@@ -237,10 +237,126 @@ h1, h2, h3, h4, h5, h6, .cyber-btn, .section-title, .status-label {
 
 .message-user {
     border-left: none;
-    border-right: 3px solid #607d8b;
-    background-color: rgba(96, 125, 139, 0.15);
+    border-right: 3px solid var(--info-color);
+    background-color: rgba(0, 168, 255, 0.15);
     align-self: flex-end;
     margin-left: auto;
+}
+
+/* 待确认的本地消息样式 */
+.message-pending {
+    opacity: 0.6;
+    font-style: italic;
+}
+
+.message-user .message-sender {
+    color: var(--info-color);
+}
+
+/* 工程师对话消息样式 */
+.message-engineer-question {
+    border-left: none;
+    border-right: 3px solid #4fc3f7;
+    background-color: rgba(79, 195, 247, 0.15);
+    align-self: flex-end;
+    margin-left: auto;
+    max-width: 80%;
+}
+
+.message-engineer-question .message-sender {
+    color: #4fc3f7;
+}
+
+.message-ai-assistant {
+    border-left: 3px solid #66bb6a;
+    background-color: rgba(102, 187, 106, 0.1);
+    max-width: 85%;
+}
+
+.message-ai-assistant .message-sender {
+    color: #66bb6a;
+}
+
+/* AI思考指示器样式 */
+.message[data-message-type="thinking"] {
+    border-left: 3px solid #ff9800;
+    background-color: rgba(255, 152, 0, 0.08);
+    max-width: 85%;
+    animation: thinking-pulse 1.5s ease-in-out infinite;
+}
+
+.message[data-message-type="thinking"] .message-sender {
+    color: #ff9800;
+}
+
+.message[data-message-type="thinking"] .message-content {
+    font-style: italic;
+    color: rgba(255, 152, 0, 0.8);
+}
+
+@keyframes thinking-pulse {
+    0%, 100% { opacity: 0.6; }
+    50% { opacity: 1; }
+}
+
+.engineer-question p {
+    margin: 0;
+    padding: 8px 12px;
+    border-radius: 12px;
+    background-color: rgba(79, 195, 247, 0.2);
+    border: 1px solid rgba(79, 195, 247, 0.3);
+}
+
+.ai-response {
+    margin: 0;
+}
+
+.ai-response.markdown-content {
+    background-color: rgba(102, 187, 106, 0.05);
+    border-radius: 8px;
+    padding: 12px;
+    border: 1px solid rgba(102, 187, 106, 0.2);
+}
+
+.ai-response.markdown-content h1,
+.ai-response.markdown-content h2,
+.ai-response.markdown-content h3 {
+    color: #66bb6a;
+    margin-top: 0;
+    margin-bottom: 8px;
+}
+
+.ai-response.markdown-content p {
+    margin-bottom: 8px;
+    line-height: 1.6;
+}
+
+.ai-response.markdown-content code {
+    background-color: rgba(0, 0, 0, 0.3);
+    padding: 2px 4px;
+    border-radius: 3px;
+    font-family: 'Consolas', 'Monaco', monospace;
+}
+
+.ai-response.markdown-content pre {
+    background-color: rgba(0, 0, 0, 0.4);
+    padding: 12px;
+    border-radius: 6px;
+    overflow-x: auto;
+    margin: 8px 0;
+}
+
+.ai-response.markdown-content ul,
+.ai-response.markdown-content ol {
+    margin-left: 20px;
+    margin-bottom: 8px;
+}
+
+.ai-response.markdown-content blockquote {
+    border-left: 3px solid #66bb6a;
+    margin-left: 0;
+    padding-left: 12px;
+    color: rgba(224, 224, 224, 0.8);
 }
 
 .message-header {
@@ -636,6 +752,21 @@ h1, h2, h3, h4, h5, h6, .cyber-btn, .section-title, .status-label {
 
 .chat-input::placeholder {
     color: rgba(224, 224, 224, 0.5);
+}
+
+.input-help-text {
+    margin-top: 8px;
+    font-size: 0.8rem;
+    color: rgba(224, 224, 224, 0.6);
+    text-align: center;
+    font-style: italic;
+}
+
+.input-help-text span {
+    background-color: rgba(0, 168, 255, 0.1);
+    padding: 4px 8px;
+    border-radius: 4px;
+    border: 1px solid rgba(0, 168, 255, 0.2);
 }
 
 /* 右侧面板 */
@@ -1065,6 +1196,22 @@ h1, h2, h3, h4, h5, h6, .cyber-btn, .section-title, .status-label {
     transition: all 0.3s ease;
 }
 
+/* 源码复制按钮样式 */
+.copy-btn {
+    background: none;
+    border: none;
+    color: var(--light-text);
+    font-size: 1.1rem;
+    cursor: pointer;
+    margin-right: 10px;
+    transition: all 0.3s ease;
+}
+
+.copy-btn:hover {
+    color: var(--primary-color);
+    text-shadow: var(--text-glow);
+}
+
 .cyber-modal-close:hover {
     color: var(--primary-color);
     text-shadow: var(--text-glow);
@@ -1470,6 +1617,8 @@ h1, h2, h3, h4, h5, h6, .cyber-btn, .section-title, .status-label {
     background-color: rgba(0, 0, 0, 0.2);
     border-left: 3px solid #607d8b;
     color: rgba(224, 224, 224, 0.7);
+    align-self: flex-end;
+    margin-left: auto;
 }
 
 .message-system .message-sender {
@@ -1550,41 +1699,41 @@ h1, h2, h3, h4, h5, h6, .cyber-btn, .section-title, .status-label {
     margin: 0;
 }
 
-/* 任务和动作中的角色颜色 */
-.task-assignee, .action-assignee {
+/* 任务、动作和命令中的角色颜色 */
+.task-assignee, .action-assignee, .command-assignee {
     color: var(--light-text); /* 默认颜色 */
 }
 
-.task-assignee.role-manager, .action-assignee.role-manager {
+.task-assignee.role-manager, .action-assignee.role-manager, .command-assignee.role-manager {
     color: var(--success-color);
 }
 
-.task-assignee.role-operator, .action-assignee.role-operator {
+.task-assignee.role-operator, .action-assignee.role-operator, .command-assignee.role-operator {
     color: var(--warning-color);
 }
 
-.task-assignee.role-executor, .action-assignee.role-executor {
+.task-assignee.role-executor, .action-assignee.role-executor, .command-assignee.role-executor {
     color: #9c27b0;
 }
 
-.task-assignee.role-expert, .action-assignee.role-expert {
+.task-assignee.role-expert, .action-assignee.role-expert, .command-assignee.role-expert {
     color: #ff9800;
 }
 
-.task-assignee.role-captain, .action-assignee.role-captain {
+.task-assignee.role-captain, .action-assignee.role-captain, .command-assignee.role-captain {
     color: var(--primary-color);
 }
 
 /* 子角色颜色 */
-.task-assignee.role-analyst, .action-assignee.role-analyst {
+.task-assignee.role-analyst, .action-assignee.role-analyst, .command-assignee.role-analyst {
     color: var(--success-color); /* 改为绿色 */
 }
 
-.task-assignee.role-coordinator, .action-assignee.role-coordinator {
+.task-assignee.role-coordinator, .action-assignee.role-coordinator, .command-assignee.role-coordinator {
     color: var(--success-color); /* 改为绿色 */
 }
 
-.task-assignee.role-responder, .action-assignee.role-responder {
+.task-assignee.role-responder, .action-assignee.role-responder, .command-assignee.role-responder {
     color: var(--success-color); /* 改为绿色 */
 }
 
@@ -1616,6 +1765,13 @@ h1, h2, h3, h4, h5, h6, .cyber-btn, .section-title, .status-label {
     white-space: nowrap;
     overflow: hidden;
     border-left: 3px solid #9c27b0;
+}
+
+.command-assignee {
+    font-weight: bold;
+    margin-right: 3px;
+    font-size: 0.9em;
+    display: inline-block;
 }
 
 .command-name {
@@ -2006,6 +2162,53 @@ h1, h2, h3, h4, h5, h6, .cyber-btn, .section-title, .status-label {
 .cyber-btn.secondary:hover {
     background-color: rgba(255, 255, 255, 0.1);
     box-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+}
+
+/* 事件关系树样式 */
+.event-tree-container ul {
+    list-style: none;
+    padding-left: 20px;
+    margin-left: 10px;
+    position: relative;
+}
+
+.event-tree-container ul::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    border-left: 1px dashed rgba(255, 255, 255, 0.3);
+}
+
+.event-tree-container li {
+    margin-bottom: 4px;
+    position: relative;
+    padding-left: 20px;
+}
+
+.event-tree-container li::before {
+    content: '';
+    position: absolute;
+    top: 0.85em;
+    left: 0;
+    width: 20px;
+    border-top: 1px dashed rgba(255, 255, 255, 0.3);
+}
+
+.event-tree-round {
+    margin-bottom: 15px;
+}
+
+.event-tree-round-title {
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+
+.event-tree-status {
+    margin-left: 6px;
+    color: var(--primary-color);
+    font-size: 0.85rem;
 }
 
 /* 执行任务通知 */

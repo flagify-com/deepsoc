@@ -179,7 +179,7 @@ async function fetchEvents() {
             data.data.forEach(event => {
                 const createdAt = new Date(event.created_at).toLocaleString('zh-CN');
                 const eventLink = `/warroom/${event.event_id}`;
-                const statusBadge = getStatusBadge(event.status);
+                const statusBadge = getStatusBadge(event.event_status);
                 const severityBadge = getSeverityBadge(event.severity);
                 
                 html += `
@@ -258,9 +258,15 @@ function checkAuth() {
 
 // 更新UI以反映认证状态
 function updateAuthUI(isAuthenticated) {
-    const createEventCard = document.querySelector('.card:has(#event-form)');
+    const cardList = document.querySelectorAll('.card');
+    let createEventCard = null;
+    cardList.forEach(card => {
+        if (card.querySelector('#event-form')) {
+            createEventCard = card;
+        }
+    });
+
     const loginPrompt = document.getElementById('login-prompt');
-    
     if (createEventCard) {
         if (isAuthenticated) {
             createEventCard.classList.remove('d-none');
@@ -274,14 +280,24 @@ function updateAuthUI(isAuthenticated) {
     // 更新导航栏状态
     const loginNavItem = document.getElementById('login-nav-item');
     const userNavItem = document.getElementById('user-nav-item');
-    
+    const settingsNavItem = document.getElementById('settings-nav-item');
+    const userMgmtNavItem = document.getElementById('user-management-nav-item');
+
     if (loginNavItem && userNavItem) {
         if (isAuthenticated) {
             loginNavItem.classList.add('d-none');
             userNavItem.classList.remove('d-none');
+            if (settingsNavItem) settingsNavItem.classList.remove('d-none');
+            if (userMgmtNavItem) {
+                const info = JSON.parse(localStorage.getItem('user_info') || '{}');
+                if (info.role === 'admin') userMgmtNavItem.classList.remove('d-none');
+                else userMgmtNavItem.classList.add('d-none');
+            }
         } else {
             loginNavItem.classList.remove('d-none');
             userNavItem.classList.add('d-none');
+            if (settingsNavItem) settingsNavItem.classList.add('d-none');
+            if (userMgmtNavItem) userMgmtNavItem.classList.add('d-none');
         }
     }
 }
@@ -291,8 +307,8 @@ function updateUserInfo() {
     const userInfoElement = document.getElementById('user-info');
     if (userInfoElement) {
         const userInfo = JSON.parse(localStorage.getItem('user_info') || '{}');
-        if (userInfo.username) {
-            userInfoElement.textContent = userInfo.username;
+        if (userInfo.nickname || userInfo.username) {
+            userInfoElement.textContent = userInfo.nickname || userInfo.username;
         }
     }
 }

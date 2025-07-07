@@ -1,0 +1,45 @@
+# 包含额外的文件到包中
+
+# 文档文件
+include README.md
+include LICENSE
+include CLAUDE.md
+include changelog.md
+include sample.env
+
+# 配置文件
+include requirements.txt
+include setup.py
+include MANIFEST.in
+
+# 数据库相关
+include initial_data.sql
+include add_user_uuid.sql
+
+# 静态资源
+recursive-include app/static *
+recursive-include app/templates *
+recursive-include app/prompts *
+
+# 文档目录
+recursive-include docs *
+
+# 迁移文件
+recursive-include migrations *
+
+# 工具脚本
+recursive-include tools *.py
+
+# 排除不需要的文件
+exclude *.log
+exclude .env
+exclude *.db
+exclude venv/*
+recursive-exclude * __pycache__
+recursive-exclude * *.py[co]
+recursive-exclude * .DS_Store
+recursive-exclude * .git*
+recursive-exclude * *.orig
+recursive-exclude * *.rej
+recursive-exclude * *.tmp
+recursive-exclude * *.backup

@@ -23,6 +23,18 @@
                     <li class="nav-item">
                         <a class="nav-link active" href="/">首页</a>
                     </li>
+                    <li class="nav-item d-none" id="user-management-nav-item">
+                        <a class="nav-link" href="/user-management">用户管理</a>
+                    </li>
+                    <li class="nav-item dropdown d-none" id="settings-nav-item">
+                        <a class="nav-link dropdown-toggle" href="#" id="settings-dropdown" role="button" data-bs-toggle="dropdown">设置</a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="/settings/prompts">提示词管理</a></li>
+                            <li><a class="dropdown-item" href="/settings/background-security">安全背景</a></li>
+                            <li><a class="dropdown-item" href="/settings/soar-playbooks">SOAR剧本</a></li>
+                            <li><a class="dropdown-item" href="/settings/mcp-tools">MCP Tools</a></li>
+                        </ul>
+                    </li>
                 </ul>
                 <ul class="navbar-nav">
                     <!-- 登录前显示 -->
@@ -36,6 +48,7 @@
                             <span id="user-info">用户</span>
                         </a>
                         <ul class="dropdown-menu dropdown-menu-end">
+                            <li><a class="dropdown-item" href="/change-password">修改密码</a></li>
                             <li><a class="dropdown-item" href="#" id="logout-btn">退出登录</a></li>
                         </ul>
                     </li>
@@ -80,7 +93,7 @@
                             </div>
                             <div class="mb-3">
                                 <label for="event-message" class="form-label">事件描述 *</label>
-                                <textarea class="form-control" id="event-message" rows="4" required placeholder="例如：检测到外部IP 66.240.205.34 正在暴力破解邮件网关服务器，对应内网IP地址是192.168.22.251"></textarea>
+                                <textarea class="form-control required-field" id="event-message" rows="4" required placeholder="例如：检测到外部IP 66.240.205.34 正在暴力破解邮件网关服务器，对应内网IP地址是192.168.22.251"></textarea>
                             </div>
                             <div class="mb-3">
                                 <label for="event-context" class="form-label">事件上下文 (可选)</label>
@@ -95,7 +108,7 @@
                                 </select>
                             </div>
                             <div class="mb-3">
-                                <label for="event-source" class="form-label">事件来源</label>
+                                <label for="event-source" class="form-label">事件来源 (可选)</label>
                                 <input type="text" class="form-control" id="event-source" value="manual" placeholder="例如：SIEM, EDR, 人工报告">
                             </div>
                             <button type="submit" class="btn btn-primary w-100">创建事件</button>
@@ -128,7 +141,30 @@
     <!-- Toast容器 -->
     <div id="toast-container" class="toast-container position-fixed bottom-0 end-0 p-3"></div>
 
+    <!-- 版本信息 -->
+    <footer class="bg-light text-center py-3 mt-5">
+        <div class="container">
+            <small class="text-muted">
+                DeepSOC <span id="version-info">v1.1.0</span> | AI-Powered Security Operations Center
+            </small>
+        </div>
+    </footer>
+
     <script src="/static/js/bootstrap.bundle.min.js"></script>
     <script src="/static/js/index.js"></script>
+    
+    <!-- 加载版本信息 -->
+    <script>
+        fetch('/api/version')
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    document.getElementById('version-info').textContent = `v${data.data.version}`;
+                }
+            })
+            .catch(error => {
+                console.log('无法获取版本信息:', error);
+            });
+    </script>
 </body>
 </html> 

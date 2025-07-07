@@ -50,7 +50,10 @@ def login():
             'message': '登录成功',
             'access_token': access_token,
             'user': {
+                'user_id': user.user_id,
+                'id': user.id,
                 'username': user.username,
+                'nickname': user.nickname,
                 'email': user.email,
                 'role': user.role
             }
@@ -91,7 +94,10 @@ def get_current_user():
         return jsonify({
             'status': 'success',
             'user': {
+                'user_id': user.user_id,
+                'id': user.id,
                 'username': user.username,
+                'nickname': user.nickname,
                 'email': user.email,
                 'role': user.role,
                 'last_login_at': user.last_login_at.isoformat() if user.last_login_at else None
@@ -210,7 +216,9 @@ def create_user():
         # 创建新用户
         new_user = User(
             username=data['username'],
+            nickname=data.get('nickname'),
             email=data['email'],
+            phone=data.get('phone'),
             role=data.get('role', 'user')
         )
         new_user.set_password(data['password'])
@@ -225,8 +233,11 @@ def create_user():
             'status': 'success',
             'message': '用户账户创建成功',
             'user': {
+                'user_id': new_user.user_id,
                 'username': new_user.username,
+                'nickname': new_user.nickname,
                 'email': new_user.email,
+                'phone': new_user.phone,
                 'role': new_user.role
             }
         }), 201
@@ -238,4 +249,26 @@ def create_user():
     except Exception as e:
         db.session.rollback()
         logger.error(f"用户账户创建错误: {str(e)}")
-        return jsonify({'status': 'error', 'message': '创建过程发生错误'}), 500 
+        return jsonify({'status': 'error', 'message': '创建过程发生错误'}), 500
+
+@auth_bp.route('/change-password', methods=['POST'])
+@jwt_required()
+def change_password():
+    """修改当前用户密码"""
+    data = request.get_json()
+
+    if not all(k in data for k in ('old_password', 'new_password')):
+        return jsonify({'status': 'error', 'message': '旧密码和新密码都是必填项'}), 400
+
+    username = get_jwt_identity()
+    user = User.query.filter_by(username=username).first()
+
+    if not user or not user.check_password(data['old_password']):
+        return jsonify({'status': 'error', 'message': '旧密码不正确'}), 400
+
+    user.set_password(data['new_password'])
+    db.session.commit()
+
+    logger.info(f"用户 {username} 修改了密码")
+
+    return jsonify({'status': 'success', 'message': '密码修改成功'})
