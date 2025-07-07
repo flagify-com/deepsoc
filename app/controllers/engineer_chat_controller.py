@@ -29,6 +29,9 @@ class EngineerChatController:
             # 2. 获取最新事件概要
             latest_summary = self._get_event_summary(event_id)
             
+            # 2.1 获取事件基本信息（即使summary为空也能获取）
+            event = Event.query.filter_by(event_id=event_id).first()
+            
             # 3. 从Message表中获取工程师对话历史
             chat_history = self._get_engineer_chat_history(session_id)
             
@@ -67,9 +70,23 @@ class EngineerChatController:
                     'updated_at': latest_summary.updated_at.isoformat() if latest_summary.updated_at else None
                 }
             
+            # 准备事件基本信息
+            event_data = None
+            if event:
+                event_data = {
+                    'event_id': event.event_id,
+                    'event_name': event.event_name,
+                    'message': event.message,
+                    'context': event.context,
+                    'severity': event.severity,
+                    'source': event.source,
+                    'event_status': event.event_status,
+                    'created_at': event.created_at.isoformat() if event.created_at else None
+                }
+            
             ai_thread = threading.Thread(
                 target=self._process_ai_response_async,
-                args=(event_id, session_id, message, summary_data, summary_updated),
+                args=(event_id, session_id, message, summary_data, event_data, summary_updated),
                 daemon=True
             )
             ai_thread.start()
@@ -91,7 +108,7 @@ class EngineerChatController:
                 'message': f"处理消息时出错: {str(e)}"
             }
     
-    def _process_ai_response_async(self, event_id, session_id, user_message, summary_data, summary_updated):
+    def _process_ai_response_async(self, event_id, session_id, user_message, summary_data, event_data, summary_updated):
         """
         异步处理AI回复 - 在独立线程中运行，需要创建应用上下文
         """
@@ -107,7 +124,7 @@ class EngineerChatController:
                 chat_history = self._get_engineer_chat_history(session_id)
                 
                 # 2. 构建对话上下文
-                context = self._build_context_from_data(chat_history, user_message, summary_data, summary_updated)
+                context = self._build_context_from_data(chat_history, user_message, summary_data, event_data, summary_updated)
                 
                 # 3. 调用AI服务
                 ai_response = self._call_ai_service(context)
@@ -259,7 +276,7 @@ class EngineerChatController:
 """
         return context
     
-    def _build_context_from_data(self, chat_history, current_message, summary_data, summary_updated):
+    def _build_context_from_data(self, chat_history, current_message, summary_data, event_data, summary_updated):
         """基于简单数据结构构建对话上下文（用于异步线程）"""
         # 1. 格式化历史对话（最近10轮对话，即20条消息）
         formatted_history = []
@@ -286,23 +303,48 @@ class EngineerChatController:
             
             formatted_history.append(f"{role}: {content}")
         
-        # 2. 构建事件概要信息
-        summary_info = "暂无事件概要"
+        # 2. 构建事件信息
         event_id_display = "未知"
+        event_basic_info = ""
+        summary_info = ""
         
-        if summary_data:
-            event_id_display = summary_data.get('event_id', '未知')
-            if summary_data.get('event_summary'):
-                summary_info = summary_data['event_summary']
+        # 获取事件基本信息（始终包含）
+        if event_data:
+            event_id_display = event_data.get('event_id', '未知')
+            event_basic_info = f"""
+## 事件基本信息
+- 事件名称: {event_data.get('event_name', '未命名事件')}
+- 事件描述: {event_data.get('message', '无描述')}
+- 事件上下文: {event_data.get('context', '无上下文')}
+- 严重程度: {event_data.get('severity', '未知')}
+- 事件来源: {event_data.get('source', '未知')}
+- 事件状态: {event_data.get('event_status', '未知')}
+- 创建时间: {event_data.get('created_at', '未知')}
+"""
         
-        update_status = "本次对话中事件概要有更新" if summary_updated else "事件概要无更新"
+        # 获取事件概要信息（如果存在）
+        if summary_data and summary_data.get('event_summary'):
+            event_id_display = summary_data.get('event_id', event_id_display)
+            summary_info = f"""
+## AI分析概要
+{summary_data['event_summary']}
+
+## AI处置建议
+{summary_data.get('event_suggestion', '暂无建议')}
+"""
+            update_status = "（本次对话中事件概要有更新）" if summary_updated else ""
+        else:
+            summary_info = "## AI分析概要\n事件尚未完成第一轮AI分析，暂无概要信息。\n"
+            update_status = ""
         
         # 3. 构建完整上下文
         context = f"""
-# 安全事件概要信息
+# 安全事件完整信息
+
 事件ID: {event_id_display}
-概要信息: {summary_info}
-概要更新状态: {update_status}
+
+{event_basic_info}
+{summary_info}{update_status}
 
 # 历史对话记录
 {chr(10).join(formatted_history) if formatted_history else '暂无历史对话'}
@@ -310,8 +352,11 @@ class EngineerChatController:
 # 当前问题
 工程师问题: {current_message}
 
-请基于以上信息回答工程师的问题。你是一个专业的安全运营AI助手，请提供准确、有用的建议和信息。
-如果事件概要有更新，请特别关注新的变化并在回答中体现出来。
+请基于以上完整信息回答工程师的问题。你是一个专业的安全运营AI助手，需要：
+1. 结合事件基本信息（名称、描述、上下文等）理解事件本质
+2. 参考AI分析概要（如果有）了解已有的分析结果
+3. 基于完整上下文提供准确、专业、可操作的建议
+4. 如果事件概要有更新，请特别关注新的变化
 """
         return context
     
