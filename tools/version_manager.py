@@ -84,24 +84,6 @@ def update_version_file(new_version: str, release_name: str = None):
     
     print(f"✅ 版本文件已更新: {new_version}")
 
-def update_setup_py(new_version: str):
-    """更新setup.py中的版本号（如果直接硬编码了版本号）"""
-    setup_file = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'setup.py')
-    
-    if not os.path.exists(setup_file):
-        return
-    
-    with open(setup_file, 'r', encoding='utf-8') as f:
-        content = f.read()
-    
-    # 检查是否有硬编码的版本号
-    if 'version=' in content and not 'version=__version__' in content:
-        content = re.sub(r'version=["\'][^"\']+["\']', f'version="{new_version}"', content)
-        
-        with open(setup_file, 'w', encoding='utf-8') as f:
-            f.write(content)
-        
-        print(f"✅ setup.py 已更新")
 
 def update_changelog(new_version: str, release_name: str = None):
     """更新changelog.md"""
@@ -252,7 +234,6 @@ def main():
         
         # 更新版本文件
         update_version_file(new_version, args.release_name)
-        update_setup_py(new_version)
         
         # 更新changelog
         if not args.no_changelog:
@@ -273,7 +254,6 @@ def main():
         
         # 更新版本文件
         update_version_file(args.version, args.release_name)
-        update_setup_py(args.version)
         
         # 更新changelog
         if not args.no_changelog:

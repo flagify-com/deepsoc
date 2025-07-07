@@ -9,7 +9,6 @@ include sample.env
 
 # 配置文件
 include requirements.txt
-include setup.py
 include MANIFEST.in
 
 # 数据库相关
