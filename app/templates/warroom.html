@@ -60,10 +60,13 @@
             <!-- 输入区域 -->
             <div class="chat-input-container">
                 <div class="chat-input-wrapper">
-                    <input type="text" id="user-input" class="chat-input" placeholder="输入指令...">
+                    <input type="text" id="user-input" class="chat-input" placeholder="输入消息... (使用@AI向AI助手提问)">
                     <button id="send-button" class="cyber-btn">
                         <span class="cyber-btn-text">发送</span>
                     </button>
+                </div>
+                <div class="input-help-text">
+                    <span>💡 使用提示：输入 <strong>@AI 问题内容</strong> 与AI助手对话，普通消息作为作战室聊天记录</span>
                 </div>
             </div>
         </div>
@@ -356,9 +359,11 @@
     <!-- Toast通知 -->
     <div id="toast-container" class="toast-container"></div>
 
+
     <script src="/static/js/bootstrap.bundle.min.js"></script>
     <script src="/static/js/socket.io.min.js"></script>
     <script src="/static/js/marked.min.js"></script>
     <script src="/static/js/warroom.js"></script>
+    
 </body>
 </html> 

@@ -113,8 +113,10 @@ def get_event_messages(event_id):
         msg_dict = message.to_dict()
         if message.user_id:
             user = User.query.filter_by(user_id=message.user_id).first()
-            if user and user.nickname:
-                msg_dict['user_nickname'] = user.nickname
+            if user:
+                # 优先使用昵称，如果没有昵称则使用用户名
+                msg_dict['user_nickname'] = user.nickname or user.username
+                msg_dict['user_username'] = user.username  # 同时提供用户名信息
         result.append(msg_dict)
 
     return jsonify({
@@ -203,9 +205,13 @@ def send_message(event_id):
 
     temp_id = data.get('temp_id')
 
+    # 获取当前用户信息
+    current_user = get_current_user()
+    
     message = Message(
         message_id=str(uuid.uuid4()),
         event_id=event_id,
+        user_id=current_user.user_id,
         message_from=data.get('sender', 'user'),
         message_type='user_message',
         message_content=message_content

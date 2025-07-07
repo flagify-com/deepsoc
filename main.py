@@ -4,6 +4,7 @@ import argparse
 import logging
 import threading  # Added for MQ Consumer
 import atexit  # Added for graceful shutdown
+import traceback  # Added for error logging
 from sqlalchemy import text
 from flask import Flask, jsonify, render_template, redirect, url_for, request, make_response
 from flask_socketio import SocketIO
@@ -13,12 +14,31 @@ from functools import wraps
 from dotenv import load_dotenv
 from app.models import db
 from app.utils.logging_config import configure_logging
-from app.models.models import Prompt
+from app.models.models import Prompt, User
 from app.prompts.default_prompts import DEFAULT_PROMPTS
 from app.utils.mq_consumer import RabbitMQConsumer # Added MQ Consumer
+from app import __version__, get_version, get_version_info
+import sys
 
 # 配置日志
 logger = configure_logging()
+
+# 显示版本信息
+def print_version_info():
+    """打印版本信息"""
+    version_info = get_version_info()
+    version_info['python_version'] = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+    
+    print("=" * 60)
+    print(f"🚀 DeepSOC - AI-Powered Security Operations Center")
+    print("=" * 60)
+    print(f"版本: {version_info['version']}")
+    print(f"发布名称: {version_info['release_name']}")
+    print(f"构建日期: {version_info['build_date']}")
+    print(f"Python 版本: {version_info['python_version']}")
+    print(f"描述: {version_info['description']}")
+    print("=" * 60)
+    logger.info(f"DeepSOC v{version_info['version']} 启动")
 
 # 加载环境变量
 load_dotenv(override=True)
@@ -76,6 +96,9 @@ app.register_blueprint(state_bp, url_prefix='/api/state')
 from app.controllers.user_controller import user_bp
 app.register_blueprint(user_bp, url_prefix='/api/user')
 
+from app.controllers.engineer_chat_api import engineer_chat_bp
+app.register_blueprint(engineer_chat_bp, url_prefix='/api/engineer-chat')
+
 from app.controllers.socket_controller import register_socket_events
 register_socket_events(socketio)
 
@@ -101,7 +124,7 @@ def handle_mq_message_to_socketio(message_data):
     # This could be made more specific based on message_type if frontend handles different events.
     socketio_event_name = 'new_message' 
     
-    logger.info(f"MQ Consumer: Relaying message (ID: {message_id}, Type: {message_type}) to SocketIO room '{event_id}' for event '{socketio_event_name}'")
+    logger.debug(f"MQ Consumer: Relaying message (ID: {message_id}, Type: {message_type}) to SocketIO room '{event_id}' for event '{socketio_event_name}'")
     try:
         # Emit with app.app_context() to ensure context for operations like url_for if used by SocketIO internals
         # although socketio.emit itself is generally thread-safe and handles context for its own operations.
@@ -114,11 +137,20 @@ def handle_mq_message_to_socketio(message_data):
 
 def start_rabbitmq_consumer():
     global mq_consumer, mq_consumer_thread
-    logger.info("Initializing RabbitMQ consumer...")
+    logger.debug("Initializing RabbitMQ consumer...")
+    # 明确传递环境变量参数，确保使用正确的配置
+    rabbitmq_host = os.getenv('RABBITMQ_HOST', '127.0.0.1')
+    rabbitmq_port = int(os.getenv('RABBITMQ_PORT', 5672))
+    rabbitmq_user = os.getenv('RABBITMQ_USER', 'guest')
+    rabbitmq_password = os.getenv('RABBITMQ_PASSWORD', 'guest')
+    rabbitmq_vhost = os.getenv('RABBITMQ_VHOST', '/')
+    
     mq_consumer = RabbitMQConsumer(
-        # Uses default connection params from mq_consumer.py which read from .env
-        # queue_name can be specific if needed, default is fine
-        # routing_key default 'notifications.frontend.#' is also fine
+        host=rabbitmq_host,
+        port=rabbitmq_port,
+        username=rabbitmq_user,
+        password=rabbitmq_password,
+        virtual_host=rabbitmq_vhost
     )
     
     # Start consuming in a separate thread
@@ -130,21 +162,21 @@ def start_rabbitmq_consumer():
         daemon=True # Daemon thread will exit when the main program exits
     )
     mq_consumer_thread.start()
-    logger.info("RabbitMQ consumer thread started.")
+    logger.debug("RabbitMQ consumer thread started.")
 
 def stop_rabbitmq_consumer():
     global mq_consumer, mq_consumer_thread
     if mq_consumer:
-        logger.info("Stopping RabbitMQ consumer...")
+        logger.debug("Stopping RabbitMQ consumer...")
         mq_consumer.stop_consuming()
         if mq_consumer_thread and mq_consumer_thread.is_alive():
-            logger.info("Waiting for RabbitMQ consumer thread to join...")
+            logger.debug("Waiting for RabbitMQ consumer thread to join...")
             mq_consumer_thread.join(timeout=10) # Wait for up to 10 seconds
             if mq_consumer_thread.is_alive():
                 logger.warning("RabbitMQ consumer thread did not join in time.")
             else:
-                logger.info("RabbitMQ consumer thread joined successfully.")
-    logger.info("RabbitMQ consumer stopped.")
+                logger.debug("RabbitMQ consumer thread joined successfully.")
+    logger.debug("RabbitMQ consumer stopped.")
 
 # Register the cleanup function to be called on exit
 atexit.register(stop_rabbitmq_consumer)
@@ -250,6 +282,17 @@ def health():
         'message': 'DeepSOC API is healthy'
     })
 
+@app.route('/api/version')
+def api_version():
+    """获取系统版本信息API"""
+    version_info = get_version_info()
+    version_info['python_version'] = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+    
+    return jsonify({
+        'status': 'success',
+        'data': version_info
+    })
+
 def create_tables():
     """重新创建数据库表，确保结构最新"""
     with app.app_context():
@@ -288,6 +331,33 @@ def create_default_prompts():
         db.session.commit()
         logger.info("默认提示词导入完成")
 
+def create_admin_user():
+    """创建默认管理员用户"""
+    with app.app_context():
+        # 检查admin用户是否已存在
+        existing_admin = User.query.filter_by(username='admin').first()
+        if existing_admin:
+            logger.info("管理员用户已存在，跳过创建")
+            return
+        
+        # 创建admin用户
+        admin_user = User(
+            username='admin',
+            nickname='管理员',
+            email='admin@deepsoc.local',
+            phone='18999990000',
+            role='admin',
+            is_active=True
+        )
+        admin_user.set_password('admin123')
+        db.session.add(admin_user)
+        db.session.commit()
+        
+        logger.info("管理员用户创建成功")
+        logger.info("用户名: admin")
+        logger.info("密码: admin123")
+        logger.info("邮箱: admin@deepsoc.local")
+
 def start_agent(role):
     """启动特定角色的Agent"""
     logger.info(f"启动 {role} Agent")
@@ -311,16 +381,46 @@ def start_agent(role):
         sys.exit(1)
 
 if __name__ == '__main__':
+    # 显示版本信息
+    print_version_info()
+    
     parser = argparse.ArgumentParser(description='DeepSOC - AI驱动的安全运营中心')
     parser.add_argument('-role', type=str, help='Agent角色: _captain, _manager, _operator, _executor, _expert')
-    parser.add_argument('-init', action='store_true', help='初始化数据库')
+    parser.add_argument('-init', action='store_true', help='系统初始化：数据库表 + 提示词 + 管理员用户')
+    parser.add_argument('-init-with-demo', action='store_true', help='完整初始化：数据库 + 演示数据（推荐）')
+    parser.add_argument('-load_demo', action='store_true', help='仅加载演示数据（需要已存在的数据库）')
+    parser.add_argument('-version', action='store_true', help='显示版本信息')
     args = parser.parse_args()
     
-    if args.init:
+    if args.version:
+        sys.exit(0)
+    
+    if getattr(args, 'init_with_demo', False):
+        logger.info("开始完整初始化（包含演示数据）...")
         create_tables()
-        import_sql_file()
-        # import_sql_file()已经包含提示词初始化，这里不需要再调用create_default_prompts()
-        # create_default_prompts()
+        create_default_prompts()
+        create_admin_user()
+        logger.info("系统初始化完成 - 数据库表、提示词、管理员用户已创建")
+        logger.info("开始加载演示数据...")
+        import_sql_file("sql_data/initial_data.sql")
+        logger.info("演示数据加载完成")
+        logger.info("完整初始化全部完成")
+        sys.exit(0)
+    
+    if args.init:
+        logger.info("开始系统初始化...")
+        create_tables()
+        create_default_prompts()
+        create_admin_user()
+        logger.info("系统初始化完成 - 数据库表、提示词、管理员用户已创建")
+        sys.exit(0)
+    
+    if args.load_demo:
+        logger.info("开始加载演示数据...")
+        import_sql_file("sql_data/initial_data.sql")
+        logger.info("演示数据加载完成")
+        sys.exit(0)
+    
     
     if args.role:
         # When running as an agent, do not start the MQ consumer or web server.
@@ -329,15 +429,37 @@ if __name__ == '__main__':
         # This is the main web server process
         logger.info("Starting DeepSOC Web Server and services...")
         
-        # Start RabbitMQ consumer only when running as the main web server
+        # 先检查端口可用性，避免启动后台线程后才发现端口冲突
+        host = os.getenv('LISTEN_HOST', '0.0.0.0')
+        port = int(os.getenv('LISTEN_PORT', 5007))
+        
+        try:
+            import socket
+            # 测试端口是否可用
+            test_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            test_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            test_socket.bind((host, port))
+            test_socket.close()
+            logger.info(f"Port {port} is available, starting services...")
+        except OSError as e:
+            logger.error(f"Port {port} is not available: {e}")
+            logger.error("Please stop the existing process or use a different port.")
+            sys.exit(1)
+        
+        # 端口可用后再启动RabbitMQ consumer
         start_rabbitmq_consumer()
         
         # 启动Web服务器
-        socketio.run(
-            app, 
-            host=os.getenv('LISTEN_HOST', '0.0.0.0'), 
-            port=int(os.getenv('LISTEN_PORT', 5007)), 
-            debug=(os.getenv('FLASK_DEBUG', 'False').lower() == 'true'), # Control via env var
-            use_reloader=False, # Important: reloader can cause issues with threads and SocketIO
-            allow_unsafe_werkzeug=(os.getenv('FLASK_DEBUG', 'False').lower() == 'true') # Werkzeug specific for debug
-        ) 
+        try:
+            socketio.run(
+                app, 
+                host=host, 
+                port=port, 
+                debug=(os.getenv('FLASK_DEBUG', 'False').lower() == 'true'), # Control via env var
+                use_reloader=False, # Important: reloader can cause issues with threads and SocketIO
+                allow_unsafe_werkzeug=True # Allow for development and testing
+            )
+        except Exception as e:
+            logger.error(f"Failed to start web server: {e}")
+            stop_rabbitmq_consumer()
+            sys.exit(1) 

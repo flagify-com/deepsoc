@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep:*)",
+      "Bash(python:*)",
+      "Bash(export FLASK_APP=main.py)",
+      "Bash(flask db:*)",
+      "Bash(ls:*)",
+      "Bash(pkill:*)",
+      "Bash(curl:*)",
+      "Bash(kill:*)",
+      "Bash(cat:*)",
+      "Bash(timeout:*)",
+      "Bash(ps:*)",
+      "Bash(pip install:*)",
+      "Bash(pip show:*)",
+      "Bash(rg:*)",
+      "Bash(find:*)",
+      "Bash(git add:*)",
+      "Bash(mv:*)",
+      "Bash(chmod:*)",
+      "Bash(PYTHONPATH=/tmp/demo_app python /tmp/demo_app/version_manager.py show)",
+      "Bash(rm:*)"
+    ],
+    "deny": []
+  }
+}

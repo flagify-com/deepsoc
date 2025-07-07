@@ -13,7 +13,8 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 # RabbitMQ connection parameters from environment variables
-RABBITMQ_HOST = os.getenv('RABBITMQ_HOST', 'localhost')
+# 强制使用IPv4地址，避免IPv6连接尝试
+RABBITMQ_HOST = os.getenv('RABBITMQ_HOST', '127.0.0.1')
 RABBITMQ_PORT = int(os.getenv('RABBITMQ_PORT', 5672))
 RABBITMQ_USER = os.getenv('RABBITMQ_USER', 'guest')
 RABBITMQ_PASSWORD = os.getenv('RABBITMQ_PASSWORD', 'guest')
@@ -38,7 +39,8 @@ class RabbitMQConsumer:
             host=host, port=port,
             virtual_host=virtual_host, credentials=self.credentials,
             heartbeat=600, # Keep connection alive
-            blocked_connection_timeout=300
+            blocked_connection_timeout=300,
+            socket_timeout=10  # 设置socket超时，加快失败检测
         )
         self.exchange_name = exchange_name
         self.exchange_type = exchange_type
@@ -86,16 +88,10 @@ class RabbitMQConsumer:
             logger.error("Consumer: Channel is not open. Cannot setup exchange/queue.")
             return
         try:
-            logger.info(f"Consumer: Declaring exchange '{self.exchange_name}' (type: {self.exchange_type})")
             self._channel.exchange_declare(exchange=self.exchange_name, exchange_type=self.exchange_type, durable=True)
-            
-            logger.info(f"Consumer: Declaring queue '{self.queue_name}'")
-            # Exclusive=False, auto_delete=False to make it survive consumer restarts if needed (though typically main app and consumer live together)
             self._channel.queue_declare(queue=self.queue_name, durable=True, exclusive=False, auto_delete=False)
-            
-            logger.info(f"Consumer: Binding queue '{self.queue_name}' to exchange '{self.exchange_name}' with routing key '{self.routing_key}'")
             self._channel.queue_bind(queue=self.queue_name, exchange=self.exchange_name, routing_key=self.routing_key)
-            logger.info("Consumer: Exchange, queue, and binding setup complete.")
+            logger.debug("Consumer: Exchange, queue, and binding setup complete.")
         except Exception as e:
             logger.error(f"Consumer: Error setting up exchange/queue: {e}")
             logger.error(traceback.format_exc())
@@ -132,7 +128,7 @@ class RabbitMQConsumer:
             return
 
         self.is_consuming = True
-        logger.info("Consumer: Starting to consume messages...")
+        logger.debug("Consumer: Starting to consume messages...")
         while self.is_consuming:
             try:
                 if not self._connection or self._connection.is_closed:
@@ -150,6 +146,7 @@ class RabbitMQConsumer:
                     # auto_ack=False is default and correct, we do manual ack
                 )
                 # Blocking call that processes network events
+                # 使用非阻塞方式，以便能够响应停止信号
                 self._channel.start_consuming()
             except pika.exceptions.StreamLostError as e_stream_lost:
                 logger.error(f"Consumer: StreamLostError during consumption: {e_stream_lost}. Will attempt to reconnect.")
@@ -195,22 +192,36 @@ class RabbitMQConsumer:
     def stop_consuming(self):
         logger.info("Consumer: Received stop signal.")
         self.is_consuming = False
-        # For BlockingConnection, stopping consumption from another thread is tricky.
-        # Pika recommends using connection.add_callback_threadsafe for this.
-        # A simpler way for now is to let the consuming loop break and then close.
-        # If channel is active, try to stop it from consuming new messages.
-        if self._channel and self._channel.is_open and self.is_consuming == False:
-             # This might not immediately stop start_consuming() if it's blocked, but good to try
-             try:
-                if self._consumer_tag:
-                    self._channel.basic_cancel(self._consumer_tag)
-                    logger.info(f"Consumer: Consumer tag {self._consumer_tag} cancelled on stop.")
-             except Exception as e_cancel:
-                logger.error(f"Consumer: Error cancelling consumer tag on stop: {e_cancel}")
         
-        # The actual closing of channel/connection will happen when the start_consuming loop exits.
-        # If it's stuck, one might need to close connection more forcefully or use select_connection.
-        # For a simple threaded model, setting is_consuming to False and letting the loop exit is often sufficient.
+        # 更强制的停止机制
+        try:
+            # 1. 先尝试取消consumer tag
+            if self._channel and self._channel.is_open and self._consumer_tag:
+                self._channel.basic_cancel(self._consumer_tag)
+                logger.debug(f"Consumer: Consumer tag {self._consumer_tag} cancelled on stop.")
+        except Exception as e_cancel:
+            logger.error(f"Consumer: Error cancelling consumer tag on stop: {e_cancel}")
+        
+        try:
+            # 2. 强制关闭channel
+            if self._channel and self._channel.is_open:
+                self._channel.close()
+                logger.debug("Consumer: Channel closed forcefully.")
+        except Exception as e_channel:
+            logger.error(f"Consumer: Error closing channel: {e_channel}")
+            
+        try:
+            # 3. 强制关闭connection
+            if self._connection and self._connection.is_open:
+                self._connection.close()
+                logger.debug("Consumer: Connection closed forcefully.")
+        except Exception as e_conn:
+            logger.error(f"Consumer: Error closing connection: {e_conn}")
+        
+        # 重置状态
+        self._channel = None
+        self._connection = None
+        self._consumer_tag = None
 
 # Example Usage (for testing, not part of the library itself):
 # def my_message_processor(message_data):

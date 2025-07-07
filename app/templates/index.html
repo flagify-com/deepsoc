@@ -141,7 +141,30 @@
     <!-- Toast容器 -->
     <div id="toast-container" class="toast-container position-fixed bottom-0 end-0 p-3"></div>
 
+    <!-- 版本信息 -->
+    <footer class="bg-light text-center py-3 mt-5">
+        <div class="container">
+            <small class="text-muted">
+                DeepSOC <span id="version-info">v1.1.0</span> | AI-Powered Security Operations Center
+            </small>
+        </div>
+    </footer>
+
     <script src="/static/js/bootstrap.bundle.min.js"></script>
     <script src="/static/js/index.js"></script>
+    
+    <!-- 加载版本信息 -->
+    <script>
+        fetch('/api/version')
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    document.getElementById('version-info').textContent = `v${data.data.version}`;
+                }
+            })
+            .catch(error => {
+                console.log('无法获取版本信息:', error);
+            });
+    </script>
 </body>
 </html> 
