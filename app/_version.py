@@ -2,12 +2,12 @@
 DeepSOC 版本信息
 """
 
-__version__ = "1.7.1"
-__version_info__ = (1, 7, 1)
+__version__ = "1.8.1"
+__version_info__ = (1, 8, 1)
 
 # 版本元数据
 VERSION_MAJOR = 1
-VERSION_MINOR = 7
+VERSION_MINOR = 8
 VERSION_PATCH = 1
 VERSION_BUILD = None
 
@@ -30,7 +30,7 @@ def get_version_info():
         "build_date": "2025-07-07",  # 可以通过CI/CD自动更新
         "python_version": None,  # 运行时填充
         "git_commit": None,      # 可以通过CI/CD自动更新
-        "release_name": "优化文档",
+        "release_name": "版本管理优化&文档升级优化",
         "description": "AI-Powered Security Operations Center with Multi-Agent Architecture"
     }
 
